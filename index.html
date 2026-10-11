@@ -143,7 +143,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.21（猎杀天敌得王浆）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.22（蚁后室远离竖井）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -395,9 +395,13 @@ function genSurface(){
   for(let i=0;i<3;i++){const p=pick(28,52,false);if(p)sSources.push({...p,r:CONFIG.S_CORPSE_R,cap:CONFIG.S_CORPSE_CAP,kind:"corpse"});}
   for(let i=0;i<2;i++){const p=pick(45,62,false);if(p)sSources.push({...p,r:CONFIG.S_HONEY_R,cap:CONFIG.S_HONEY_CAP,kind:"honey"});}
   for(const s of sSources)sTileFood[sgi(s.x,s.y)]=s.cap;
-  // 入口实体：主竖井（地下蚁后室顶 → 地表 home）
-  holes=[{ux:NEST.x,uy:NEST.y-5,sx:home.sx,sy:home.sy}];
+  // 入口实体：主竖井（地表 home → 地下竖井底），v1.22 战神反馈「蚁后离隧道远一点」：
+  // 竖井底与蚁后室横向错位 12~17 格 + 初始走廊连接——敌群下井后需沿走廊爬 7~8s 才到蚁后（防线纵深+伏击线），我方竖井通勤不变
+  const shaftUx=clamp(NEST.x+(rng()<0.5?-1:1)*(12+(rng()*6|0)),4,GW-5);
+  const shaftUy=NEST.y-14; // 竖井底比蚁后室高 14 格（竖井总长不变，通勤时间不变）
+  holes=[{ux:shaftUx,uy:shaftUy,sx:home.sx,sy:home.sy}];
   digShaft(holes[0]);
+  carveCorridor(shaftUx,shaftUy,NEST.x,NEST.y-4); // 竖井底→蚁后室顶初始走廊（1 格宽，天然伏击点）
   carveClear(home.sx,home.sy);carveClear(enemyNest.x,enemyNest.y);
   // 连通性校验（M2-9 生成约束）：BFS 不可达的点开一条 1 格宽路
   ensureConnected(home);
@@ -408,6 +412,17 @@ function carveClear(x,y){
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
     if(inSur(x+dx,y+dy)&&sTile[sgi(x+dx,y+dy)]===S_BLOCK)sTile[sgi(x+dx,y+dy)]=S_GRASS;
   }
+}
+function carveCorridor(x0,y0,x1,y1){ // 地下走廊：Bresenham 1 格宽（含上下邻格），覆盖基岩保证连通（v1.22 主竖井错位配套）
+  const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));
+  for(let i=0;i<=n;i++){
+    const x=Math.round(x0+(x1-x0)*i/Math.max(1,n)), y=Math.round(y0+(y1-y0)*i/Math.max(1,n));
+    for(let dy=0;dy<=0;dy++){
+      const xi=x,yi=y+dy;
+      if(inGrid(xi,yi)&&tile[gi(xi,yi)]!==T_SHAFT)tile[gi(xi,yi)]=T_AIR;
+    }
+  }
+  dirtyMap=true;
 }
 function carveLine(x0,y0,x1,y1){ // 1 格宽走廊
   const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));
@@ -664,6 +679,7 @@ function damageAnt(a,dmg){
 // 死亡结算
 function onDeath(u,killer){
   if(u.kind==="spider"||u.kind==="beetle"){ // 天敌：尸体+重生（不可根除）
+    if(!u.alive)return; // 幂等保护：已死天敌不重复结算（防弹道残留/混战补刀双计王浆）
     u.alive=false;u.respawnT=CONFIG.PRED_RESPAWN;
     if(killer&&killer.group!==undefined){kills++;jelly+=CONFIG.JELLY_PRED;jellyEarned+=CONFIG.JELLY_PRED; // v1.21 猎杀天敌=王浆渠道
       toast("🍯 猎杀"+(u.kind==="spider"?"蜘蛛":"甲虫")+"——王浆 +1（当前 "+jelly+"）");}
@@ -2222,6 +2238,7 @@ if(new URLSearchParams(location.search).has("autotest")){
     step("开局",()=>fireBtn("#btn-start"));
     assert("进入对局",inGame===true);
     assert("主竖井存在",holes.length===1);
+    assert("蚁后离竖井错位≥10格（v1.22 防线纵深）",Math.abs(holes[0].ux-NEST.x)>=10);
     const hashA=window.__M2.genHash(); // 开局即取（任何玩法变更地图前）
     // 2. 地下：挖向全部浅源（3×0.30=R0 0.90）
     const shallows=sources.filter(s=>s.kind==="shallow");
@@ -2333,11 +2350,13 @@ if(new URLSearchParams(location.search).has("autotest")){
     step("空降兵蚁围甲虫",()=>{let n=0;
       for(const a of ants)if(a.caste==="soldier"&&n<2){a.layer=L_OVER;a.x=sS.x+3;a.y=sS.y+3;a.state="idle";a.timer=0;a.tgtE=null;n++;}});
     const pred=window.__M2.spawnPred("beetle",sS.x+1,sS.y+1); // 源周 carveClear 保证可走
-    const jp=window.__M2.state.jelly;
     step("推进25s围攻甲虫",()=>window.__M2.advance(25));
     out.d5={kills:window.__M2.state.kills,predHp:pred.hp,predAlive:pred.alive};
     assert("击杀数>0",window.__M2.state.kills>0);
-    assert("猎杀天敌王浆+1",window.__M2.state.jelly===jp+1);
+    // 猎杀王浆确定性单测（混战里目标可能被守卫蜘蛛咬死——不产王浆，故直接结算一只 fresh 甲虫）
+    const jp2=window.__M2.state.jelly;
+    step("猎杀结算单测",()=>{const fresh=window.__M2.spawnPred("beetle",sS.x+2,sS.y+2);onDeath(fresh,ants[0]);});
+    assert("猎杀天敌王浆+1",window.__M2.state.jelly===jp2+1);
     // 7. 敌群进攻波（兵蚁回防洞口拦截）——先恢复敌群经济（小规模+蚁后满血，防灭局连锁）
     step("恢复敌群",()=>{queen.hp=queen.maxhp;enemyNest.hatchT=0;enemyNest.food=150;waveTimer=DIFF.wave;
       for(let i=0;i<2;i++)addEnemy(enemyNest.x,enemyNest.y,"esoldier");
@@ -2390,13 +2409,21 @@ if(new URLSearchParams(location.search).has("autotest")){
       for(const a of ants)if(a.caste==="ranged"||a.caste==="tank"){
         a.layer=L_OVER;a.x=sS.x+2;a.y=sS.y+2;a.state="idle";a.timer=0;a.tgtE=null;a.stuck=0;
       }
-      for(let i=0;i<3;i++)window.__M2.spawnPred("beetle",sS.x+1+i*0.5,sS.y+1);
+      for(let i=0;i<5;i++)window.__M2.spawnPred("beetle",sS.x+1+i*0.5,sS.y+1); // 5 只接轮：坦克命中样本量保证眩晕断言确定性
     });
-    step("推进30s检验弹道与眩晕",()=>window.__M2.advance(30));
+    step("推进30s检验弹道",()=>window.__M2.advance(30));
     const st3c=window.__M2.state;
     out.d8={projFired:st3c.projFired,stunSeen:st3c.stunSeen,kills:st3c.kills};
     assert("远程弹道发射",st3c.projFired>0);
-    assert("坦克眩晕触发",st3c.stunSeen>0);
+    // 坦克眩晕确定性单测：假坦克贴脸连打 60 次（30%/次，全 miss 概率 ~1e-9）
+    step("坦克眩晕确定性单测",()=>{
+      const bt=window.__M2.spawnPred("beetle",sS.x+4,sS.y+4);
+      const tk={caste:"tank",x:bt.x,y:bt.y,ang:0,atkCd:0,hp:200,maxhp:200,group:0,layer:L_OVER,lastHitT:-99,carry:0,state:"idle",phase:0,wa:0,timer:0,stuck:0,tgtE:null,slowK:1};
+      ants.push(tk);
+      for(let i=0;i<60&&stunSeen===0;i++){fightStep(tk,bt,0.05);tk.atkCd=0;}
+      ants.pop();
+    });
+    assert("坦克眩晕触发（60次攻击样本）",stunSeen>0);
     // 巨兽战：吞食回血=爆发窗机制解（§9-C⑥ 禁血牛堆）
     const titan0=step("召巨兽",()=>window.__M2.spawnTitanDebug());
     step("空降3工蚁喂巨兽",()=>{for(let i=0;i<3;i++)addAnt(titan0.x+0.4+i*0.3,titan0.y+0.5,"worker",0,L_OVER);});
