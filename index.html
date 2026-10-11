@@ -972,7 +972,7 @@ function antStepUnder(a,dt){
       const d=claimDig(a);
       if(d){a.state="dig";a.tgt=d;return;}
       if(markers.some(m=>m.layer===L_UNDER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP){a.state="forage";return;}
-      if(markers.some(m=>m.layer===L_OVER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP){a.state="goup";return;} // 本组地表有活儿：上行
+      if(markers.some(m=>m.layer===L_OVER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP&&!(isNight()&&a.rule!=="combat")){a.state="goup";return;} // 本组地表有活儿：上行（v1.26 夜间豁免——原条件无昼夜检查，夜间折返蚁进洞即被再派出，在洞口反复进出=一直抖）
       a.timer=1+rng()*2;a.ang=rng()*6.283;
     }
     moveSteer(a,dt,NEST.x,NEST.y,2.5);
@@ -1060,7 +1060,7 @@ function antStepOver(a,dt){
   if(a.state==="forage"){
     if(a.carry>0){a.state="return";return;}
     // 夜间自动收缩（M2-7）：采集/兼顾组夜间概率折返
-    if(isNight()&&a.rule!=="combat"&&rng()<CONFIG.NIGHT_RETURN_P*dt*10){a.state="return";return;}
+    if(isNight()&&a.rule!=="combat"&&rng()<CONFIG.NIGHT_RETURN_P*dt){a.state="return";return;} // v1.26 折返率修正：原式带 ×10（实际 ~92%/s 全员闪回），回归设计值 25%/s 平滑收缩
     let mx=null,md=1e9;
     for(const m of markers){if(m.layer===L_OVER&&m.group===a.group){const d=dist2(a.x,a.y,m.x,m.y);if(d<md){md=d;mx=m;}}}
     if(!mx){a.state="idle";a.timer=0;return;}
