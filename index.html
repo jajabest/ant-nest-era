@@ -143,7 +143,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.22（蚁后室远离竖井）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.24（兵籍绑定+自动替补）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -160,6 +160,7 @@
       · 地表（俯视）：Tab 或 ⇄ 切换；食物更丰富，但有天敌与敌对蚁群<br>
       · 编组：3 队各自规则（采集/战斗/兼顾）；标记与放卵都归入当前队<br>
       · 四兵种：工蚁采集 / 兵蚁近战 / 远程蚁（脆、射蚁酸、需掩护）/ 坦克蚁（血厚吸火）<br>
+      · 兵籍绑定：育婴格孵化成虫后绑兵种（格角徽记）；阵亡自动扣 60% 费快速替补（15s），换兵种=拆格重造<br>
       · 🍯王浆升级：灭巢+3、杀巨兽+2、存活满 1 天+1；每兵种分支二选一锁死，立即生效<br>
       · 敌群策略开局随机（经济/侵略/均衡）；波数 3 后巨兽来袭——吞食回血，进食瞬间 ×3 集火<br>
       · 新入口 30：地下选点打竖井直通地表，多一个口=多一条采集线+一个防守面<br>
@@ -203,6 +204,9 @@ const CONFIG = {
   START_FOOD: 50, START_WORKERS: 5, START_NURSERY: 6, FOOD_PILE: 50,
   EGG_COST: 10, NURSERY_COST: 15, BROOD_EGG: 10, BROOD_LARVA: 10, BROOD_PUPA: 10,
   LAY_COOLDOWN: 4, NURSERY_REFUND: 7, // §5 产卵间隔：8→4（2026-10-10 战神 Gate 反馈「间隔有点长」降半；仍保弱瓶颈：6 格连放 24s<30s 首孵）
+  // v1.24 战神指令：原作式「兵营-单位绑定」——育婴格孵化成虫后绑兵种，阵亡自动扣费快速替补（§9-F 原作机制对齐）
+  REPLACEMENT_K: 0.6,           // [PH] 替补费=全价 60%（工6/兵15/远18/坦24——「不会扣很多」但有战损成本，防无脑兵海）
+  REPLACEMENT_T: 15,            // [PH] 替补孵化 15s（原 30s 链减半：死亡→扣费→15s 归队，保留战损窗口又够爽快）
   U: 0,                         // §5 维持消耗：2026-10-11 战神裁决移除（「只有生蛋的时候再扣」）——sink 只剩建造/孵化，通胀护栏注记见 §5；保留行位防误回填
   STOCK_CAP: 200,               // [PH] §3 边界：库存满则采集暂停（M1 终审落地）
   // STARVE_SLOW 已随维持消耗一并移除（2026-10-11 战神裁决）——断粮仅 HUD 警示（没钱生蛋）
@@ -698,6 +702,19 @@ function onDeath(u,killer){
   if(i>=0){
     if(u.state==="dig")releaseDig(u.tgt); // 防 claim 泄漏
     ants.splice(i,1);pushCorpse(u.x,u.y,u.layer);
+    // v1.24 兵籍替补：绑定蚁阵亡 → 其格自动扣 60% 费走 15s 快速替补（钱不够挂起，补款自动开孵）
+    if(u.homeTi!==undefined){
+      const nn=nurseries.find(n=>n.ti===u.homeTi);
+      if(nn){
+        const cost=Math.ceil(CASTE_STATS[u.caste].cost*CONFIG.REPLACEMENT_K);
+        nn.bound=null;
+        if(stock>=cost){stock-=cost;nn.bound=u.caste;
+          broods.push({ti:nn.ti,stage:0,timer:CONFIG.REPLACEMENT_T/3,caste:u.caste,group:u.group,fast:true});
+          toast(CASTE_CN[u.caste]+"阵亡——扣 "+cost+" 食物，替补孵化中（15s）");
+        }else{nn.pending=cost;nn.pendingCaste=u.caste;
+          toast(CASTE_CN[u.caste]+"阵亡——食物不足（需 "+cost+"），替补挂起待补款");}
+      }
+    }
   }
 }
 function pushCorpse(x,y,layer){
@@ -1219,12 +1236,13 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       const cost=CASTE_STATS[caste].cost;
       const n=nurseries.find(n=>n.ti===ti&&!broods.some(b=>b.ti===ti));
       if(!n){toast("点击空的育婴格放卵");return;}
+      if(n.bound){toast("该格已绑定"+CASTE_CN[n.bound]+"（存活中）——换兵种请先拆除");return;} // v1.24 绑定格不可重复放卵
       if(queenCd>0){toast("蚁后产卵冷却中 "+queenCd.toFixed(1)+"s");return;}
       if(stock<cost){toast("食物不足（需 "+cost+"）");return;}
       if(popCount()>=nurseries.length){toast("育婴格已满，先造格（人口=育婴格数）");return;}
       stock-=cost;queenCd=CONFIG.LAY_COOLDOWN;
       broods.push({ti,stage:0,timer:CONFIG.BROOD_EGG,caste,group:curGroup});
-      toast(CASTE_CN[caste]+"卵 → "+groups[curGroup].name);
+      toast(CASTE_CN[caste]+"卵 → "+groups[curGroup].name+"（成虫后绑定此格）");
     }else if(tool==="hole"){
       if(!isDug(tx,ty)||isShaft(tx,ty)){toast("竖井入口需建在挖空的地面（将向上整列打通）");return;}
       if(holes.some(h=>Math.abs(h.ux-tx)<3&&Math.abs(h.uy-ty)<3)){toast("距现有入口太近");return;}
@@ -1236,6 +1254,17 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     }else if(tool==="demolish"){
       const ni=nurseries.findIndex(n=>n.ti===ti);
       if(ni>=0){
+        const n=nurseries[ni];
+        const dweller=n.bound?ants.find(a=>a.homeTi===n.ti):null;
+        if(dweller){ // v1.24 拆绑定格=格中成虫一并死亡（M1-3 条款），二次确认防误拆
+          if(!toolAt._confirm){toolAt._confirm=2;setTimeout(()=>toolAt._confirm=0,2500);
+            toast("⚠ 此格绑定的"+CASTE_CN[n.bound]+"将一并死亡（二次点按确认）");return;}
+          toolAt._confirm=0;
+          nurseries.splice(ni,1);stock+=CONFIG.NURSERY_REFUND;
+          dweller.hp=0;onDeath(dweller,{});
+          toast("育婴格已拆除（返 "+CONFIG.NURSERY_REFUND+"），格中蚁已亡");
+          return;
+        }
         const bi=broods.findIndex(b=>b.ti===ti);
         if(bi>=0){toast("⚠ 格内有幼体，将一并销毁（二次点按确认）");
           if(!toolAt._confirm){toolAt._confirm=2;setTimeout(()=>toolAt._confirm=0,2500);return;}
@@ -1818,8 +1847,13 @@ function renderUnder(c){
   // 育婴格+幼体
   for(const n of nurseries){
     const x=(n.ti%GW)*CONFIG.TILE,y=((n.ti/GW)|0)*CONFIG.TILE;
-    c.strokeStyle="rgba(232,217,184,.4)";c.lineWidth=1;
+    c.strokeStyle=n.pending?"rgba(255,200,60,.8)":"rgba(232,217,184,.4)";c.lineWidth=1; // v1.24 替补挂起格闪黄框
     c.strokeRect(x+2,y+2,CONFIG.TILE-4,CONFIG.TILE-4);
+    if(n.bound&&!broods.some(b=>b.ti===n.ti)){ // v1.24 兵籍徽：成虫在外执勤，格角标兵种
+      c.fillStyle={worker:"#d98e2b",soldier:"#ff6a4e",ranged:"#8fc255",tank:"#ff9628"}[n.bound];
+      c.font="bold 9px sans-serif";c.textAlign="center";
+      c.fillText(SQ_CN[n.bound],x+CONFIG.TILE-5,y+CONFIG.TILE-3);
+    }
   }
   for(const b of broods){
     const x=(b.ti%GW+0.5)*CONFIG.TILE,y=((b.ti/GW|0)+0.5)*CONFIG.TILE;
@@ -2036,14 +2070,27 @@ function update(dt){
   for(let i=broods.length-1;i>=0;i--){
     const b=broods[i];b.timer-=dt;
     if(b.timer<=0){
-      if(b.stage===0){b.stage=1;b.timer=CONFIG.BROOD_LARVA;}
-      else if(b.stage===1){b.stage=2;b.timer=CONFIG.BROOD_PUPA;}
+      const seg=b.fast?CONFIG.REPLACEMENT_T/3:CONFIG.BROOD_LARVA; // v1.24 替补快速链每段 5s
+      if(b.stage===0){b.stage=1;b.timer=seg;}
+      else if(b.stage===1){b.stage=2;b.timer=b.fast?seg:CONFIG.BROOD_PUPA;}
       else{
         const x=b.ti%GW,y=(b.ti/GW)|0;
         broods.splice(i,1);
         addAnt(x+0.5,y+0.5,b.caste,b.group,L_UNDER);
+        const na=ants[ants.length-1];
+        na.homeTi=b.ti; // v1.24 兵籍绑定：此蚁属此格
+        const nn=nurseries.find(n=>n.ti===b.ti);if(nn)nn.bound=b.caste;
         peakPop=Math.max(peakPop,ants.length);
       }
+    }
+  }
+  // v1.24 替补挂起补款：钱够时自动扣费开孵
+  for(const n of nurseries){
+    if(n.pending&&stock>=n.pending){
+      stock-=n.pending;
+      broods.push({ti:n.ti,stage:0,timer:CONFIG.REPLACEMENT_T/3,caste:n.pendingCaste,group:0,fast:true});
+      n.bound=n.pendingCaste;n.pendingCaste=null;n.pending=0;
+      toast("🍯 补款到账——"+CASTE_CN[n.bound]+"替补开始孵化");
     }
   }
   for(const e of enemies)enemyStep(e,dt);
@@ -2443,14 +2490,31 @@ if(new URLSearchParams(location.search).has("autotest")){
     step("选育婴格工具",()=>fireBtn('[data-tool="nursery"]'));
     step("造育婴格C",()=>fireCanvas(NEST.x+2,NEST.y+2));
     step("造育婴格D",()=>fireCanvas(NEST.x-2,NEST.y+2));
+    step("造育婴格F",()=>fireCanvas(NEST.x-1,NEST.y+2));
     step("选远程卵",()=>fireBtn('[data-tool="eggr"]'));
-    step("放远程卵",()=>{queenCd=0;fireCanvas(NEST.x+4,NEST.y+2);});
+    step("放远程卵@C",()=>{queenCd=0;fireCanvas(NEST.x+2,NEST.y+2);});
     step("选坦克卵",()=>fireBtn('[data-tool="eggt"]'));
-    step("放坦克卵",()=>{queenCd=0;fireCanvas(NEST.x+3,NEST.y+3);});
+    step("放坦克卵@D",()=>{queenCd=0;fireCanvas(NEST.x-2,NEST.y+2);});
     window.__M2.advance(35);
     const st3b=window.__M2.state;
     out.d7={ranged:st3b.ranged,tanks:st3b.tanks};
     assert("远程/坦克孵化",st3b.ranged>=1&&st3b.tanks>=1);
+    step("造育婴格F",()=>fireCanvas(NEST.x-1,NEST.y+2)); // 与 C/D 同批早造，压人口曲线
+    step("兵籍单测：程序化放卵@隔离格",()=>{ // UI 放卵已由兵蚁/远程卵步骤覆盖；本单测用独立 ti 避 fireCanvas ±1 格偏差
+      window.__M2.bindTi=gi(NEST.x-4,NEST.y+2);
+      nurseries.push({ti:window.__M2.bindTi});
+      broods.push({ti:window.__M2.bindTi,stage:0,timer:CONFIG.BROOD_EGG,caste:"worker",group:0});
+    });
+    window.__M2.advance(35);
+    const bindAnt=ants.find(a=>a.homeTi===window.__M2.bindTi);
+    assert("成虫兵籍绑定",!!bindAnt&&nurseries.some(n=>n.ti===window.__M2.bindTi&&n.bound==="worker"));
+    step("击杀绑定工蚁",()=>onDeath(bindAnt,{}));
+    const rb=broods.find(b=>b.fast&&b.ti===window.__M2.bindTi);
+    assert("自动扣60%费快速替补卵",!!rb&&rb.caste==="worker");
+    window.__M2.advance(16);
+    assert("15s 替补成虫归队",ants.some(a=>a.homeTi===window.__M2.bindTi&&a.caste==="worker"));
+    step("注入王浆",()=>window.__M2.grantJelly(6));
+    // 兵籍绑定+自动替补（v1.24）：放工蚁卵→成虫绑定→击杀→自动扣 60% 快速替补
     step("注入王浆",()=>window.__M2.grantJelly(6));
     const j0=window.__M2.state.jelly;
     step("打开升级面板",()=>fireBtn("#btn-jelly"));
@@ -2504,7 +2568,7 @@ if(new URLSearchParams(location.search).has("autotest")){
     assert("击杀巨兽王浆+2",st3e.jelly===jt+2&&st3e.titanAlive===false);
     assert("巨兽残骸成为食物源",st3e.sSourceN===sSourceBase+1);
     // 存活王浆：拨时钟归零再推满 1 昼夜天（清场：防 482s 内敌群杀蚁后干扰断言）
-    step("清场休整",()=>{enemies.length=0;enemyNest.hatchT=1e9;enemyNest.food=0;waveTimer=1e9;queen.hp=queen.maxhp;queenCd=0;titanTimer=-1;});
+    step("清场休整",()=>{enemies.length=0;enemyNest.hatchT=1e9;enemyNest.food=0;waveTimer=1e9;queen.hp=queen.maxhp;queenCd=0;titanTimer=-1;titan=null;});
     step("拨时钟归零",()=>window.__M2.resetDay(0));
     step("推进一个昼夜天",()=>window.__M2.advance(482));
     assert("昼夜交替王浆×2（每半天1枚）",window.__M2.state.jellyEarned>=2);
