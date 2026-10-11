@@ -1,0 +1,2444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="application-name" content="蚁巢纪元">
+<meta name="apple-mobile-web-app-title" content="蚁巢纪元">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>蚁巢纪元</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#14100c;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none;
+    -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  #game{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+  /* HUD */
+  #hud{position:fixed;top:10px;left:10px;background:rgba(16,12,8,.78);border:1px solid rgba(232,217,184,.18);
+    border-radius:10px;padding:8px 12px;color:#e8d9b8;font-size:13px;line-height:1.65;pointer-events:none;z-index:10;min-width:170px}
+  #hud b{color:#ffb45e}
+  #hud .warn{color:#ff8a5e;font-weight:600}
+  #devhud{position:fixed;top:10px;right:10px;background:rgba(16,12,8,.78);border:1px solid rgba(232,217,184,.18);
+    border-radius:10px;padding:6px 10px;color:#9fe89f;font-size:11px;line-height:1.5;pointer-events:none;z-index:10;display:none;text-align:right}
+  /* 工具栏（两行：指令行+编组行） */
+  #toolbar{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10;
+    background:rgba(16,12,8,.82);border:1px solid rgba(232,217,184,.18);border-radius:14px;padding:8px;max-width:96vw;width:max-content;flex-wrap:wrap;justify-content:center}
+  .btn{min-width:52px;min-height:44px;padding:6px 8px;border-radius:10px;border:1px solid rgba(232,217,184,.25);
+    background:#241a10;color:#e8d9b8;font-size:13px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:manipulation}
+  .btn small{font-size:10px;font-weight:400;opacity:.75}
+  .btn.active{background:#5a3d16;border-color:#ffb45e;color:#ffd9a0;box-shadow:0 0 0 2px rgba(255,180,94,.35)}
+  .btn:active{transform:scale(.96)}
+  .btn.gb{min-width:44px}
+  #speedbox .btn{min-width:44px}
+  #orient{position:fixed;inset:0;background:#14100c;color:#e8d9b8;display:none;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;font-size:18px;line-height:1.8;z-index:999;padding:24px}
+  #orient small{font-size:13px;opacity:.7}
+  /* 列队面板（v1.15 原作式：看队内构成 + 拖拽调兵） */
+  #squad{position:fixed;inset:0;background:rgba(8,5,2,.74);z-index:40;display:none;align-items:center;justify-content:center;touch-action:none}
+  #squad .spanel{background:rgba(24,17,10,.97);border:1px solid rgba(232,217,184,.25);border-radius:16px;padding:14px;
+    width:min(94vw,760px);max-height:84vh;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 40px rgba(0,0,0,.55)}
+  #squad .shead{display:flex;align-items:center;gap:10px}
+  #squad .shead b{color:#ffb45e;font-size:16px;letter-spacing:1px}
+  #squad .shead span{font-size:12px;opacity:.6}
+  #squad .sclose{margin-left:auto;min-width:44px;min-height:36px}
+  #squad .cols{display:flex;gap:10px;min-height:0}
+  .scol{--gc:#8a5410;flex:1;min-width:0;background:rgba(16,12,8,.6);border:1.5px solid var(--gc);border-radius:12px;padding:8px;
+    display:flex;flex-direction:column;min-height:240px;max-height:62vh}
+  .scol.hover{box-shadow:0 0 0 2px #ffd9a0 inset,0 0 16px var(--gc)}
+  .scol h4{margin:0 0 7px;font-size:13.5px;color:var(--gc);display:flex;justify-content:space-between;align-items:baseline;gap:4px}
+  .scol h4 em{font-style:normal;font-size:11px;opacity:.75;font-weight:400}
+  .slist{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:5px;min-height:0}
+  .slist .empty{opacity:.45;font-size:12px;text-align:center;padding:14px 0}
+  .acard{display:flex;align-items:center;gap:6px;background:#241a10;border:1px solid rgba(232,217,184,.15);
+    border-left:3px solid var(--gc);border-radius:8px;padding:4px 7px;font-size:12px;color:#e8d9b8;
+    touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;min-height:30px}
+  .acard .ring{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--gc);background:#3a2a18;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#ffd9a0}
+  .acard .hp{flex:1;height:4px;background:#0d0906;border-radius:2px;overflow:hidden;min-width:20px}
+  .acard .hp i{display:block;height:100%;background:#7fe07f}
+  .acard .st{opacity:.6;font-size:10px;flex:none;white-space:nowrap}
+  .acard.picked{outline:2px solid #ffd9a0;background:#3a2812}
+  #dragGhost{position:fixed;z-index:99;pointer-events:none;display:none;align-items:center;gap:5px;
+    background:rgba(58,40,18,.95);border:1px solid #ffd9a0;border-radius:8px;padding:4px 9px;font-size:12px;color:#ffd9a0;font-weight:700}
+  #toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(90,40,16,.92);color:#ffd9a0;
+    padding:8px 18px;border-radius:10px;font-size:14px;font-weight:600;z-index:20;display:none;pointer-events:none;border:1px solid rgba(255,138,94,.4)}
+  #hint{position:fixed;bottom:178px;left:50%;transform:translateX(-50%);color:rgba(232,217,184,.55);font-size:12px;z-index:9;pointer-events:none;text-align:center}
+  /* 主菜单 / 战报 overlay */
+  .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 30%,#2a1c0e,#0d0906 75%);z-index:50;
+    display:flex;align-items:center;justify-content:center;color:#e8d9b8}
+  .panel{background:rgba(24,17,10,.94);border:1px solid rgba(232,217,184,.22);border-radius:16px;padding:28px 34px;
+    max-width:min(92vw,460px);box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  .panel h1{margin:0 0 4px;font-size:26px;color:#ffb45e;letter-spacing:2px}
+  .panel .sub2{font-size:12.5px;opacity:.6;margin-bottom:18px}
+  .panel label{display:block;font-size:13px;margin:12px 0 4px;opacity:.85}
+  .panel select,.panel input{width:100%;padding:9px 10px;border-radius:8px;border:1px solid rgba(232,217,184,.3);
+    background:#1a1209;color:#e8d9b8;font-size:14px;box-sizing:border-box}
+  .panel .big{width:100%;margin-top:18px;padding:12px;font-size:16px;border-radius:10px;background:#5a3d16;border:1px solid #ffb45e;color:#ffd9a0;cursor:pointer;font-weight:700}
+  .panel .big:active{transform:scale(.98)}
+  .panel .ghost{width:100%;margin-top:8px;padding:9px;font-size:13px;border-radius:10px;background:transparent;border:1px solid rgba(232,217,184,.25);color:#cbbfa8;cursor:pointer}
+  .panel .about{font-size:12.5px;line-height:1.7;opacity:.8;display:none;margin-top:12px;border-top:1px solid rgba(232,217,184,.15);padding-top:10px}
+  #report .stats{font-size:14px;line-height:2;margin:10px 0}
+  #report .stats b{color:#ffb45e}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="orient">🐜 蚁巢纪元需要更宽的屏幕<br><small>请用平板（横屏）或电脑浏览器打开</small></div>
+<div id="hud"></div>
+<div id="devhud"></div>
+<div id="toast"></div>
+<div id="hint">拖动=移动视角 ｜ 滚轮/双指=缩放 ｜ Tab=切换地表/地下 ｜ 空格=暂停 ｜ D=调试视图</div>
+<div id="toolbar">
+  <button class="btn" data-tool="pan">🖐<small>平移</small></button>
+  <button class="btn active" data-tool="mark">🧭<small>采集标记</small></button>
+  <button class="btn" data-tool="dig">⛏️<small>挖掘</small></button>
+  <button class="btn" data-tool="nursery">🧱<small>育婴格 15</small></button>
+  <button class="btn" data-tool="egg">🥚<small>工蚁卵 10</small></button>
+  <button class="btn" data-tool="eggs">🪖<small>兵蚁卵 25</small></button>
+  <button class="btn" data-tool="eggr">🧪<small>远程卵 30</small></button>
+  <button class="btn" data-tool="eggt">🛡<small>坦克卵 40</small></button>
+  <button class="btn" data-tool="hole">🕳<small>新入口 30</small></button>
+  <button class="btn" data-tool="demolish">❌<small>拆除</small></button>
+  <button class="btn" data-tool="transfer">🔀<small>调蚁</small></button>
+  <button class="btn" id="btn-squad">📋<small>列队</small></button>
+  <button class="btn" id="btn-jelly">🍯<small>升级</small></button>
+  <button class="btn" id="btn-view">⇄<small>去地表</small></button>
+  <span style="flex-basis:100%;height:1px;background:rgba(232,217,184,.18);margin:1px 4px"></span>
+  <button class="btn gb gsel active" data-g="0">1队</button>
+  <button class="btn gb gsel" data-g="1">2队</button>
+  <button class="btn gb gsel" data-g="2">3队</button>
+  <button class="btn" id="btn-rule" style="min-width:90px">规则：采集</button>
+  <span style="width:1.5px;background:rgba(232,217,184,.22);align-self:stretch;margin:4px 2px"></span>
+  <button class="btn" data-speed="0">⏸</button>
+  <button class="btn active" data-speed="1">1×</button>
+  <button class="btn" data-speed="2">2×</button>
+  <button class="btn" data-speed="4">4×</button>
+</div>
+<div id="devbox" style="position:fixed;bottom:12px;right:12px;display:flex;gap:6px;z-index:10">
+  <button class="btn gb" id="btn-debug">🔧</button>
+  <button class="btn gb" id="btn-stress">🐝</button>
+</div>
+<div id="squad">
+  <div class="spanel">
+    <div class="shead"><b>列队</b><span>拖动蚂蚁到目标队 ｜ 或：点一下拿起 → 点目标队空处放入</span>
+      <button class="btn sclose" id="btn-squad-close">✕</button></div>
+    <div class="cols">
+      <div class="scol" data-sg="0"><h4>1队 <em></em></h4><div class="slist"></div></div>
+      <div class="scol" data-sg="1"><h4>2队 <em></em></h4><div class="slist"></div></div>
+      <div class="scol" data-sg="2"><h4>3队 <em></em></h4><div class="slist"></div></div>
+    </div>
+  </div>
+</div>
+<div id="dragGhost"></div>
+<div id="jellypanel" style="position:fixed;inset:0;background:rgba(8,5,2,.74);z-index:40;display:none;align-items:center;justify-content:center;touch-action:none">
+  <div style="background:rgba(24,17,10,.97);border:1px solid rgba(232,217,184,.25);border-radius:16px;padding:14px;
+    width:min(94vw,720px);max-height:84vh;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 40px rgba(0,0,0,.55)">
+    <div style="display:flex;align-items:center;gap:10px"><b style="color:#ffd9a0;font-size:16px;letter-spacing:1px">🍯 王浆升级</b>
+      <span style="font-size:12px;opacity:.6" id="jelly-sub"></span>
+      <button class="btn sclose" id="btn-jelly-close" style="margin-left:auto;min-width:44px;min-height:36px">✕</button></div>
+    <div style="font-size:12px;opacity:.75;line-height:1.7">王浆来自里程碑：灭巢 +3 ｜ 击杀巨兽 +2 ｜ 存活满 1 天 +1。每兵种两条分支<b>二选一锁死</b>（选定后另一条永久关闭）——升级对全体同类蚂蚁立即生效（基因层面）。</div>
+    <div id="jelly-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px;min-height:0"></div>
+  </div>
+</div>
+<div id="menu" class="overlay">
+  <div class="panel">
+    <h1>蚁巢纪元</h1>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.21（猎杀天敌得王浆）</div>
+    <label>难度</label>
+    <select id="sel-diff">
+      <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
+      <option value="normal" selected>普通 · 15 分钟内构成实质威胁</option>
+      <option value="hard">困难 · 明显压迫感</option>
+    </select>
+    <label>地图种子（留空随机；同种子同地图，可分享）</label>
+    <input id="inp-seed" placeholder="例如 42">
+    <button class="big" id="btn-start">开始新蚁巢</button>
+    <button class="ghost" id="btn-about">操作说明 / 关于</button>
+    <div class="about" id="about">
+      · 地下（剖面）：挖掘扩建巢穴，标记引导采集，育婴格孵化蚁群<br>
+      · 地表（俯视）：Tab 或 ⇄ 切换；食物更丰富，但有天敌与敌对蚁群<br>
+      · 编组：3 队各自规则（采集/战斗/兼顾）；标记与放卵都归入当前队<br>
+      · 四兵种：工蚁采集 / 兵蚁近战 / 远程蚁（脆、射蚁酸、需掩护）/ 坦克蚁（血厚吸火）<br>
+      · 🍯王浆升级：灭巢+3、杀巨兽+2、存活满 1 天+1；每兵种分支二选一锁死，立即生效<br>
+      · 敌群策略开局随机（经济/侵略/均衡）；波数 3 后巨兽来袭——吞食回血，进食瞬间 ×3 集火<br>
+      · 新入口 30：地下选点打竖井直通地表，多一个口=多一条采集线+一个防守面<br>
+      · 灭敌巢=里程碑（可继续沙盒）；蚁后死=终局。断粮不饿死成虫，只锁孵化减速<br>
+      · 机制原创实现，蚁种用真实物种学名；个人非商业作品
+    </div>
+  </div>
+</div>
+<div id="report" class="overlay" style="display:none">
+  <div class="panel">
+    <h1 id="rp-title">战报</h1>
+    <div class="sub2" id="rp-sub"></div>
+    <div class="stats" id="rp-stats"></div>
+    <button class="big" id="rp-continue" style="display:none">继续沙盒（敌群将更强）</button>
+    <button class="ghost" id="rp-restart">回到主菜单</button>
+  </div>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   蚁巢纪元 M2 · 地表与战争
+   单文件 / vanilla JS / Canvas 2D（信息素场 ImageData 直写）
+   地下 96×64 侧视剖面 + 地表 128×128 俯视，竖井入口连接
+   数值：任务单 §5（CONFIG 与 §5 一一对应；新增数值全部 [PH]）
+   ============================================================ */
+
+/* ---------------- CONFIG（§5 数值预算表镜像） ---------------- */
+const CONFIG = {
+  // 地图
+  SEED: 777,                    // 运行时由主菜单覆盖
+  GRID_W: 96, GRID_H: 64,       // §5 地下 96×64（侧视剖面）
+  SGW: 128, SGH: 128,           // §5 地表 128×128（俯视）
+  TILE: 16,
+  // 蚂蚁
+  ANT_SPEED: 2,                 // §5 移速 2 格/s
+  CARRY: 5,                     // §5 单趟载量 5
+  LOAD_TIME: 2,                 // §5 采集动作 2s
+  DIG_WORK: 9,                  // §5 挖掘速率 9 工蚁秒/格
+  SHAFT_CLIMB: 6,               // [PH] 竖井爬行速度 格/s（v1.13 战神反馈「去洞口的隧道太长」再上调：3 时主竖井 21~27 格单程 8.5s 拖通勤；6≈平地 3 倍，单程 ~4s；敌群下爬同速）
+  // 经济
+  START_FOOD: 50, START_WORKERS: 5, START_NURSERY: 6, FOOD_PILE: 50,
+  EGG_COST: 10, NURSERY_COST: 15, BROOD_EGG: 10, BROOD_LARVA: 10, BROOD_PUPA: 10,
+  LAY_COOLDOWN: 4, NURSERY_REFUND: 7, // §5 产卵间隔：8→4（2026-10-10 战神 Gate 反馈「间隔有点长」降半；仍保弱瓶颈：6 格连放 24s<30s 首孵）
+  U: 0,                         // §5 维持消耗：2026-10-11 战神裁决移除（「只有生蛋的时候再扣」）——sink 只剩建造/孵化，通胀护栏注记见 §5；保留行位防误回填
+  STOCK_CAP: 200,               // [PH] §3 边界：库存满则采集暂停（M1 终审落地）
+  // STARVE_SLOW 已随维持消耗一并移除（2026-10-11 战神裁决）——断粮仅 HUD 警示（没钱生蛋）
+  SRC_CAP: 50, SRC_R_SHALLOW: 0.30, SRC_R_DEEP: 0.45,
+  SRC_FLOOR_K: 0.3,             // [PH] 源残量线 30%（2026-10-11 战神反馈「食物采不完」：主储量 70% 可采空，枯竭线以下由供给率滴灌——稳态收入=R 不变，储量红利变一次性）
+  // 地表源（[PH] M2 新增：地表供给高于地下，风险换收益）
+  S_SEED_R: 0.6,   S_SEED_CAP: 120,    // 种子：低风险低收益
+  S_CORPSE_R: 1.2, S_CORPSE_CAP: 200,  // 虫尸：中风险中收益
+  S_HONEY_R: 2.4,  S_HONEY_CAP: 300,   // 蜜露：高风险高收益，仅夜间补货
+  // 战斗（[PH] §5 兵蚁 HP/攻击/移速行 + 工蚁行；M3 兵种表 CASTE_STATS）
+  WORKER_HP: 20, WORKER_ATK: 2,  WORKER_CD: 1.0,
+  SOLDIER_COST: 25, SOLDIER_HP: 80, SOLDIER_ATK: 10, SOLDIER_SPD: 0.7, SOLDIER_CD: 0.8, // §5 移速 -30%
+  ATK_RANGE: 1.3,
+  // v1.19 战神试玩反馈「蚁后的血太少」：我方蚁后独立血量（原共用敌后 200——围攻 ~20s 即殁，防线容错为零）
+  QUEEN_HP: 500,                // [PH] 敌后保持 200（玩家主动进攻的目标）；500≈普通档围攻 50s，够调兵回防
+  // v1.19 战神试玩反馈「蚂蚁也不能回血」：战损永久化→兵越打越少→多开洞口守不住（放大接敌面）。处方=脱战回复
+  REGEN_DELAY: 5,               // [PH] 脱战判定：受击后 5s 未再受击开始回血（避免边打边回拖垮交战节奏）
+  REGEN_RATE: 2,                // [PH] 回血 2 HP/s（工蚁 10s 回满、兵蚁 40s、坦克 100s——重伤兵返回防线后可再战，多口防守可持续）
+  // M3-1 远程兵蚁（红褐林蚁 Formica rufa 型）[PH]：高输出极脆+射程——「脆到需要掩护」（§9-A 调研）
+  RANGED_COST: 30, RANGED_HP: 48, RANGED_ATK: 14, RANGED_SPD: 0.7, RANGED_CD: 1.4, RANGED_RANGE: 4.5,
+  PROJ_SPEED: 9,                // [PH] 蚁酸弹道速 格/s
+  // M3-2 坦克蚁（巨首芭切叶蚁大型工蚁型）[PH]：高血吸火低输出；特技由升级分支决定（M3-3 嘲讽/眩晕二选一）
+  TANK_COST: 40, TANK_HP: 200, TANK_ATK: 6, TANK_SPD: 0.55, TANK_CD: 1.0,
+  // M3-3 王浆与升级（[PH] §5 王浆产出/消耗行）
+  JELLY_NEST: 3,                // 灭巢里程碑王浆（§5）
+  JELLY_TITAN: 2,               // 杀巨兽王浆（§5）
+  JELLY_PRED: 1,                // [PH] 击杀天敌（蜘蛛/甲虫）+1——v1.21 战神反馈「解锁新兵种不能只要一两个」：王浆总量不够买齐 4 兵种分支（7 枚），加可猎杀渠道（天敌可重生 300s，非无限刷）
+  JELLY_DAY: 1,                 // 存活每半个昼夜天 +1（v1.20 战神反馈「得不到王浆」节奏改判：原 1 天 1 枚=首枚 8 分钟，升级面板前期纯摆设；昼夜交替各 1 枚→首枚 4 分钟、之后每 4 分钟一枚，rationale 入 §5）
+  JELLY_COST: {worker:1, soldier:2, ranged:2, tank:3}, // [PH] 升级单价（§5 1-3 区间内：特技强度定价）
+  WORKER_CARRY_UP: 3,           // [PH] 勤劳型载量 +
+  LOAD_FAST: 0.5,               // [PH] 勤劳型采集动作缩减 s
+  EVADE: 0.35,                  // [PH] 警觉型闪避率
+  SOLDIER_ARMOR: 0.40,          // [PH] 坚壁型物理减伤
+  SOLDIER_RAGE: 0.60,           // [PH] 狂战型攻击 +
+  RANGED_PROJ: {range:2, dmg:0.40},   // [PH] 投射型：射程 +2 / 伤害 +40%
+  RANGED_RAPID: {cd:0.5, dmg:-0.20},  // [PH] 速攻型：CD 减半 / 伤害 -20%
+  TANK_TAUNT_R: 5.5,            // [PH] 嘲讽型吸火半径（原作嘲讽光环同量级）
+  TANK_REGEN: 1,                // [PH] 嘲讽型转火回血 /s（原作嘲讽型持续回复）
+  TANK_STUN_CHANCE: 0.30,       // [PH] 眩晕型命中触发率（原作眩晕型 1 级单体）
+  STUN_T: 1.2,                  // [PH] 眩晕时长 s
+  AGGRO_R: 10,                  // [PH] 战斗组索敌半径
+  BOTH_R: 5,                    // [PH] 兼顾组战斗半径
+  RETALIATE_R: 6,               // [PH] 采集组反击半径（被击后 5s 内）
+  RETALIATE_T: 5,
+  // 天敌（[PH] §5 蜘蛛战力≈8 兵蚁行；甲虫新增）
+  SPIDER_HP: 300, SPIDER_ATK: 25, SPIDER_CD: 1.5, SPIDER_SPEED: 1.2,
+  BEETLE_HP: 150, BEETLE_ATK: 12, BEETLE_CD: 1.2, BEETLE_SPEED: 1.6,
+  NIGHT_BUFF: 1.3,              // [PH] 夜晚天敌攻速/移速增益
+  PRED_RESPAWN: 300,            // [PH] 天敌重生（不可根除只可控，§3 边界）
+  // 敌群（[PH] §5 敌 AI 进攻波间隔行；三档难度）
+  EQUEEN_HP: 200, EWORKER_HP: 15, EWORKER_ATK: 2, ESOLDIER_HP: 60, ESOLDIER_ATK: 9,
+  EWORKER_CD: 1.2, ESOLDIER_CD: 0.9,
+  E_START: {eworker:6, esoldier:2},   // [PH] 开局敌群
+  E_GROWTH: 0.5,                // [PH] 敌巢被动食物/s（普通档基准）
+  E_COST_WORKER: 25, E_COST_SOLDIER: 40,  // [PH] 敌群扩军价
+  E_HATCH_T: 20,                // [PH] 敌孵化耗时
+  DIFF: { easy:{cap:12,wave:420,scale:0.6,pred:1.0},
+          normal:{cap:20,wave:330,scale:1.0,pred:1.2},
+          hard:{cap:30,wave:240,scale:1.4,pred:1.5} },
+  // M3-4 敌群策略模板（[PH] 开局按种子 roll，行为可辨识——M3-4 验收）
+  STRATS: {
+    economy:   {growth:1.30, soldierFrac:0.25, waveMul:0.65, firstWaveMul:1.15, label:"经济型 · 攒大招（前期波弱，中后期暴兵）"},
+    aggressive:{growth:0.80, soldierFrac:0.55, waveMul:1.30, firstWaveMul:0.60, label:"侵略型 · 早期施压（首波提前，兵蚁偏多）"},
+    balanced:  {growth:1.00, soldierFrac:0.40, waveMul:1.00, firstWaveMul:1.00, label:"均衡型 · 标准威胁曲线"}
+  },
+  ENDLESS_SCALE: 1.25,          // §5 无尽阶梯：每波敌群 +25%
+  ENDLESS_WAVE_K: 0.85,         // [PH] 继续沙盒后波间隔缩短系数
+  // M3-5 巨兽（美洲牛蛙型 Titan）[PH]：禁血牛堆——机制解=进食爆发窗（§9-C⑥ 调研修正）
+  TITAN_WAVE_MIN: 2,            // 首次入场条件：击退波数 ≥2（v1.20 战神反馈「得不到王浆」：原 ≥3 普通档 ~16 分钟，王浆第二来源太晚；提前到第 2 波 ~11 分钟）
+  TITAN_DELAY: 90,              // 预告后 90s 进场
+  TITAN_HP: 3000, TITAN_ATK: 60, TITAN_CD: 2.2, TITAN_SPD: 0.9,
+  TITAN_AOE_R: 1.8,             // 拍打 AoE 半径
+  TITAN_EAT_HEAL: 40,           // 吞食一只蚂蚁回血
+  TITAN_EAT_T: 1.6,             // 吞食动画=爆发窗时长（期间受伤 ×3 且站定）
+  TITAN_VULN: 3,                // 爆发窗受伤倍率
+  TITAN_LEAVE: 300,             // 5min 未被击杀自行离场（防死局）
+  // 昼夜（[PH] §5 各 4 分钟）
+  DAY_LEN: 240, NIGHT_LEN: 240,
+  NIGHT_RETURN_P: 0.25,         // [PH] 夜间地表采集蚁折返概率/s（M2-7 自动收缩）
+  // 入口
+  HOLE_COST: 30,                // [PH] 新入口造价（竖井整列施工）
+  // 信息素
+  PHER_K_FOOD: Math.log(100)/45, PHER_K_HOME: Math.log(100)/90,
+  PHER_DIFFUSE: 0.10, PHER_DEPOSIT: 2.2, PHER_FOLLOW: 0.8, WANDER: 0.3,
+  // 系统
+  STEP: 1/50, STUCK_RESCUE: 10, MAX_MARKERS: 5,
+  CORPSE_CAP: 60, CORPSE_T: 20, // [PH] 尸体上限与淡出（M2-3 防帧率衰减）
+  FOG_R: 5.5,                   // [PH] 地表探雾半径
+  STRESS_TARGET: 300,
+};
+
+/* ---------------- 工具 ---------------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let rng = mulberry32(CONFIG.SEED);      // 逻辑随机（种子驱动，重开重置）
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const dist2=(ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy};
+const lerp=(a,b,k)=>a+(b-a)*k;
+
+/* ---------------- 双层地图 ---------------- */
+const L_UNDER=0, L_OVER=1;
+const GW=CONFIG.GRID_W, GH=CONFIG.GRID_H, SGW=CONFIG.SGW, SGH=CONFIG.SGH;
+const T_SOIL=0, T_ROCK=1, T_AIR=2, T_SHAFT=3;              // 地下
+const S_GRASS=0, S_BLOCK=1;                                 // 地表（可走/障碍）
+const tile    = new Uint8Array(GW*GH).fill(T_SOIL);
+const tileFood= new Float32Array(GW*GH);
+const digReq  = new Uint8Array(GW*GH);
+const digWork = new Float32Array(GW*GH);
+const sTile    = new Uint8Array(SGW*SGH);                  // 地表
+const sTileFood= new Float32Array(SGW*SGH);
+const explored = new Uint8Array(SGW*SGH);                  // 战争迷雾（M2-2）
+const gi =(x,y)=>y*GW+x;
+const sgi=(x,y)=>y*SGW+x;
+const inGrid=(x,y)=>x>=0&&y>=0&&x<GW&&y<GH;
+const inSur =(x,y)=>x>=0&&y>=0&&x<SGW&&y<SGH;
+const isDug=(x,y)=>inGrid(x,y)&&(tile[gi(x,y)]===T_AIR||tile[gi(x,y)]===T_SHAFT);
+const isShaft=(x,y)=>inGrid(x,y)&&tile[gi(x,y)]===T_SHAFT;
+const isRock=(x,y)=>inGrid(x,y)&&tile[gi(x,y)]===T_ROCK;
+const sWalk=(x,y)=>inSur(x,y)&&sTile[sgi(x,y)]===S_GRASS;
+let dirtyMap=true, dirtySur=true;
+
+let NEST={x:22,y:30};          // 蚁后室中心（生成时定）
+let holes=[];                  // {ux,uy,sx,sy} 竖井入口：地下列+地表洞口
+let sources=[];                // 地下食物源 {x,y,r,kind}
+let sSources=[];               // 地表食物点 {x,y,r,cap,kind} kind:seed/corpse/honey
+let enemyNest=null;            // {x,y,hp,maxhp,food,dead}
+
+// ---- 地下层生成（种子制，M2-9）----
+function genUnder(){
+  tile.fill(T_SOIL);tileFood.fill(0);digReq.fill(0);digWork.fill(0);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    if(x<2||y<2||x>=GW-2||y>=GH-2) tile[gi(x,y)]=T_ROCK;
+  }
+  NEST={x:18+(rng()*12|0), y:28+(rng()*6|0)};
+  for(let y=-4;y<=4;y++)for(let x=-6;x<=6;x++){
+    if((x*x)/36+(y*y)/16<=1 && inGrid(NEST.x+x,NEST.y+y)) tile[gi(NEST.x+x,NEST.y+y)]=T_AIR;
+  }
+  for(let y=1;y<=6;y++) tile[gi(NEST.x,NEST.y+y)]=T_AIR;
+  // 食物源先行（浅源 3 巢周 8-16 + 深源 4 在 24-45）——n* 阶梯骨架
+  sources=[];
+  const ring=(r0,r1)=>{
+    for(let t=0;t<40;t++){
+      const a=rng()*6.283, r=r0+rng()*(r1-r0);
+      const x=NEST.x+Math.cos(a)*r|0, y=NEST.y+Math.sin(a)*r|0;
+      if(inGrid(x,y)&&tile[gi(x,y)]===T_SOIL&&!sources.some(s=>dist2(s.x,s.y,x,y)<36))return {x,y};
+    } return null;};
+  for(let i=0;i<3;i++){const p=ring(8,16);if(p)sources.push({...p,r:CONFIG.SRC_R_SHALLOW,kind:"shallow"});}
+  for(let i=0;i<4;i++){const p=ring(24,45);if(p)sources.push({...p,r:CONFIG.SRC_R_DEEP,kind:"deep"});}
+  for(const s of sources)tileFood[gi(s.x,s.y)]=CONFIG.SRC_CAP;
+  // 岩簇：避开巢（r≥20）+ 避开源（≥12，保证巢→源直线不被岩堵死）+ 不覆盖源格
+  const nRock=5+(rng()*4|0);
+  for(let k=0;k<nRock;k++){
+    const cx=8+(rng()*(GW-16)|0), cy=8+(rng()*(GH-16)|0);
+    if(dist2(cx,cy,NEST.x,NEST.y)<400)continue;
+    if(sources.some(s=>dist2(s.x,s.y,cx,cy)<144))continue;
+    const r=2+rng()*3;
+    for(let y=-4;y<=4;y++)for(let x=-4;x<=4;x++){
+      const xi=cx+x,yi=cy+y;
+      if(x*x+y*y<=r*r&&inGrid(xi,yi)&&tile[gi(xi,yi)]===T_SOIL&&tileFood[gi(xi,yi)]<=0)tile[gi(xi,yi)]=T_ROCK;
+    }
+  }
+  dirtyMap=true;
+}
+// ---- 地表层生成 ----
+function genSurface(){
+  sTile.fill(S_GRASS);sTileFood.fill(0);explored.fill(0);
+  // 障碍簇（灌木/岩）
+  const nObs=10+(rng()*5|0);
+  for(let k=0;k<nObs;k++){
+    const cx=6+(rng()*(SGW-12)|0), cy=6+(rng()*(SGH-12)|0);
+    const r=1.5+rng()*2;
+    for(let y=-4;y<=4;y++)for(let x=-4;x<=4;x++){
+      if(x*x+y*y<=r*r&&inSur(cx+x,cy+y))sTile[sgi(cx+x,cy+y)]=S_BLOCK;
+    }
+  }
+  // 我方主洞口：地表中带；敌巢：远角（距离≥70）
+  const home={sx:64, sy:70};
+  const corners=[[14,14],[SGW-14,14],[14,SGH-14],[SGW-14,SGH-14]];
+  let best=corners[0],bd=-1;
+  for(const c of corners){const d=dist2(c[0],c[1],home.sx,home.sy);if(d>bd){bd=d;best=c;}}
+  enemyNest={x:best[0],y:best[1],hp:CONFIG.EQUEEN_HP,maxhp:CONFIG.EQUEEN_HP,food:30,dead:false,hatchT:0};
+  // 食物点：种子×4（近，8-26）、虫尸×3（中，28-52）、蜜露×2（远，45-62，偏向敌巢方向=高风险）
+  sSources=[];
+  const pick=(r0,r1,avoid)=>{
+    for(let t=0;t<60;t++){
+      const a=rng()*6.283, r=r0+rng()*(r1-r0);
+      const x=home.sx+Math.cos(a)*r|0, y=home.sy+Math.sin(a)*r|0;
+      if(inSur(x,y)&&sTile[sgi(x,y)]===S_GRASS&&!sSources.some(s=>dist2(s.x,s.y,x,y)<64)
+        &&(!avoid||dist2(x,y,enemyNest.x,enemyNest.y)>400))return {x,y};
+    } return null;};
+  for(let i=0;i<4;i++){const p=pick(8,26,false);if(p)sSources.push({...p,r:CONFIG.S_SEED_R,cap:CONFIG.S_SEED_CAP,kind:"seed"});}
+  for(let i=0;i<3;i++){const p=pick(28,52,false);if(p)sSources.push({...p,r:CONFIG.S_CORPSE_R,cap:CONFIG.S_CORPSE_CAP,kind:"corpse"});}
+  for(let i=0;i<2;i++){const p=pick(45,62,false);if(p)sSources.push({...p,r:CONFIG.S_HONEY_R,cap:CONFIG.S_HONEY_CAP,kind:"honey"});}
+  for(const s of sSources)sTileFood[sgi(s.x,s.y)]=s.cap;
+  // 入口实体：主竖井（地下蚁后室顶 → 地表 home）
+  holes=[{ux:NEST.x,uy:NEST.y-5,sx:home.sx,sy:home.sy}];
+  digShaft(holes[0]);
+  carveClear(home.sx,home.sy);carveClear(enemyNest.x,enemyNest.y);
+  // 连通性校验（M2-9 生成约束）：BFS 不可达的点开一条 1 格宽路
+  ensureConnected(home);
+  for(const s of sSources)carveClear(s.x,s.y);
+  dirtySur=true;
+}
+function carveClear(x,y){
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    if(inSur(x+dx,y+dy)&&sTile[sgi(x+dx,y+dy)]===S_BLOCK)sTile[sgi(x+dx,y+dy)]=S_GRASS;
+  }
+}
+function carveLine(x0,y0,x1,y1){ // 1 格宽走廊
+  const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));
+  for(let i=0;i<=n;i++){
+    const x=Math.round(x0+(x1-x0)*i/Math.max(1,n)), y=Math.round(y0+(y1-y0)*i/Math.max(1,n));
+    if(inSur(x,y))sTile[sgi(x,y)]=S_GRASS;
+  }
+}
+function ensureConnected(home){
+  const seen=new Uint8Array(SGW*SGH);
+  const q=[[home.sx,home.sy]];seen[sgi(home.sx,home.sy)]=1;
+  while(q.length){
+    const [x,y]=q.pop();
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy;
+      if(inSur(nx,ny)&&!seen[sgi(nx,ny)]&&sTile[sgi(nx,ny)]===S_GRASS){seen[sgi(nx,ny)]=1;q.push([nx,ny]);}
+    }
+  }
+  const reach=(x,y)=>inSur(x,y)&&seen[sgi(x,y)];
+  const fix=(x,y)=>{
+    if(reach(x,y))return;
+    let best=null,bd=1e9;
+    for(let yy=0;yy<SGH;yy+=3)for(let xx=0;xx<SGW;xx+=3){
+      if(seen[sgi(xx,yy)]){const d=dist2(xx,yy,x,y);if(d<bd){bd=d;best=[xx,yy];}}
+    }
+    if(best)carveLine(best[0],best[1],x,y);
+  };
+  for(const s of sSources)fix(s.x,s.y);
+  fix(enemyNest.x,enemyNest.y);
+}
+// 竖井：地下层从 y=2 到 uy 的整列打通（可通行 T_SHAFT）
+function digShaft(h){
+  for(let y=2;y<=h.uy;y++)if(inGrid(h.ux,y)&&tile[gi(h.ux,y)]!==T_ROCK||y===2)tile[gi(h.ux,y)]=T_SHAFT;
+  tile[gi(h.ux,h.uy)]=T_SHAFT;
+  dirtyMap=true;
+}
+function holeAtUx(ux){return holes.find(h=>h.ux===ux);}
+function holeAtS(x,y){return holes.find(h=>dist2(h.sx+0.5,h.sy+0.5,x,y)<2.5);}
+
+/* ---------------- 信息素场（双层各一套） ---------------- */
+function makeField(w,h){return {w,h,food:new Float32Array(w*h),home:new Float32Array(w*h)};}
+let phU=null, phS=null;
+function giF(f,x,y){return y*f.w+x;}
+function phDeposit(f,arr,x,y,amt){
+  const x0=x|0,y0=y|0; if(x0<0||y0<0||x0>=f.w||y0>=f.h)return;
+  const i=giF(f,x0,y0); arr[i]=Math.min(3,arr[i]+amt);
+}
+function phUpdate(f,dt){
+  // 0.25s tick 内统一做衰减+扩散（原 decay 逐帧全场扫描太贵且未接线；指数衰减按实际步长离散，数学等价）
+  f.tick=(f.tick||0)+dt;
+  if(f.tick<0.25)return;
+  const step=f.tick;f.tick=0;
+  const kf=Math.exp(-CONFIG.PHER_K_FOOD*step), kh=Math.exp(-CONFIG.PHER_K_HOME*step);
+  const F=f.food,H=f.home;
+  for(let i=0;i<F.length;i++){F[i]*=kf;H[i]*=kh;}
+  for(let y=1;y<f.h-1;y++)for(let x=1;x<f.w-1;x++){
+    const i=giF(f,x,y);
+    const df=F[i]*CONFIG.PHER_DIFFUSE*step, dh=H[i]*CONFIG.PHER_DIFFUSE*step;
+    if(df>1e-4){F[i]-=df*4;F[i-1]+=df;F[i+1]+=df;F[i-f.w]+=df;F[i+f.w]+=df;}
+    if(dh>1e-4){H[i]-=dh*4;H[i-1]+=dh;H[i+1]+=dh;H[i-f.w]+=dh;H[i+f.w]+=dh;}
+  }
+}
+function phSense(f,arr,x,y,ang,passable){
+  let best=0.12, turn=0;
+  for(const off of [-0.9,0,0.9]){
+    const a=ang+off, sx=x+Math.cos(a)*1.6, sy=y+Math.sin(a)*1.6;
+    if(!passable(sx|0,sy|0))continue;
+    const v=arr[giF(f,sx|0,sy|0)];
+    if(v>best){best=v;turn=off>0?1:off<0?-1:0;}
+  }
+  return turn;
+}
+
+/* ---------------- 全局状态（initGame 重置） ---------------- */
+let stock=0, queenCd=0, collected=0, collectedS=0, dugCount=0, rescues=0;
+let starvingNow=false, dayT=0, kills=0, peakPop=0, waveNo=0, simTime=0;
+let waveTimer=0, fogTimer=0;
+let ants=[], broods=[], nurseries=[], markers=[], enemies=[], predators=[], corpses=[];
+let queen=null;
+// M3 状态：王浆/升级分支（二选一锁死）/蚁酸弹道/敌群策略/巨兽
+let jelly=0, jellyEarned=0, halfMark=0;
+let jellyUpgrades={worker:null, soldier:null, ranged:null, tank:null};
+let projectiles=[];
+let projFired=0, stunSeen=0, titanEatSeen=0; // autotest 观测计数器
+let stratKey="balanced", STRAT=CONFIG.STRATS.balanced;
+let titan=null, titanTimer=-1, titanAnnounced=false, wavesRepelled=0;
+let groups=[{name:"1队",rule:"forage"},{name:"2队",rule:"combat"},{name:"3队",rule:"both"}];
+let curGroup=0;
+let diffKey="normal", DIFF=CONFIG.DIFF.normal, endlessScale=1.0;
+const digClaims=new Map();
+let dust=[];
+const isNight=()=> (dayT%(CONFIG.DAY_LEN+CONFIG.NIGHT_LEN))>=CONFIG.DAY_LEN;
+// M3 兵种属性表（CONFIG 镜像；升级 buff 全部走 statOf()——「升级立即对全体生效」= 基因层面语义）
+const CASTE_STATS={
+  worker: {hp:CONFIG.WORKER_HP,  atk:CONFIG.WORKER_ATK,  cd:CONFIG.WORKER_CD,  spd:1,    cost:CONFIG.EGG_COST,     range:CONFIG.ATK_RANGE},
+  soldier:{hp:CONFIG.SOLDIER_HP, atk:CONFIG.SOLDIER_ATK, cd:CONFIG.SOLDIER_CD, spd:CONFIG.SOLDIER_SPD, cost:CONFIG.SOLDIER_COST, range:CONFIG.ATK_RANGE},
+  ranged: {hp:CONFIG.RANGED_HP,  atk:CONFIG.RANGED_ATK,  cd:CONFIG.RANGED_CD,  spd:CONFIG.RANGED_SPD,  cost:CONFIG.RANGED_COST,  range:CONFIG.RANGED_RANGE},
+  tank:   {hp:CONFIG.TANK_HP,    atk:CONFIG.TANK_ATK,    cd:CONFIG.TANK_CD,    spd:CONFIG.TANK_SPD,    cost:CONFIG.TANK_COST,    range:CONFIG.ATK_RANGE},
+};
+const CASTE_CN={worker:"工蚁",soldier:"兵蚁",ranged:"远程蚁",tank:"坦克蚁"};
+function statOf(a,key){ // 升级分支 buff 统一出口
+  const s=CASTE_STATS[a.caste], u=jellyUpgrades[a.caste];
+  if(key==="hp")return s.hp;
+  if(key==="maxhp")return s.hp;
+  if(key==="range")return (a.caste==="ranged"&&u==="proj")?s.range+CONFIG.RANGED_PROJ.range:s.range;
+  if(key==="cd"){
+    if(a.caste==="ranged"&&u==="rapid")return s.cd*CONFIG.RANGED_RAPID.cd;
+    return s.cd;
+  }
+  if(key==="atk"){
+    let v=s.atk;
+    if(a.caste==="ranged"&&u==="proj")v*=1+CONFIG.RANGED_PROJ.dmg;
+    if(a.caste==="ranged"&&u==="rapid")v*=1+CONFIG.RANGED_RAPID.dmg;
+    if(a.caste==="soldier"&&u==="rage")v*=1+CONFIG.SOLDIER_RAGE;
+    return v;
+  }
+  return s[key];
+}
+function workerCarry(){return CONFIG.CARRY+(jellyUpgrades.worker==="indust"?CONFIG.WORKER_CARRY_UP:0);}
+function loadTime(){return CONFIG.LOAD_TIME-(jellyUpgrades.worker==="indust"?CONFIG.LOAD_FAST:0);}
+
+function addAnt(x,y,caste,group,layer){
+  ants.push({x,y,ang:rng()*6.283,wa:0,carry:0,state:"idle",tgt:null,stuck:0,timer:0,phase:rng()*6.283,
+    layer:layer||L_UNDER,caste,group:group||0,rule:groups[group||0].rule,
+    hp:statOf({caste},"hp"),maxhp:statOf({caste},"maxhp"),
+    atkCd:0,tgtE:null,lastHitT:-99});
+}
+function addEnemy(x,y,caste,layer){
+  const sol=caste==="esoldier";
+  enemies.push({x,y,ang:rng()*6.283,state:sol?"patrol":"forage",layer:layer||L_OVER,
+    caste,carry:0,tgt:null,stuck:0,timer:0,phase:rng()*6.283,stunT:0,
+    hp:sol?CONFIG.ESOLDIER_HP:CONFIG.EWORKER_HP,atk:sol?CONFIG.ESOLDIER_ATK:CONFIG.EWORKER_ATK,
+    atkCd:0,cd:sol?CONFIG.ESOLDIER_CD:CONFIG.EWORKER_CD});
+}
+// M3-2 嘲讽吸火：嘲讽型坦克在光环半径内时敌人强制攻击它（原作嘲讽语义：转火+坦克自回血）
+function pickTaunt(list,x,y){
+  if(jellyUpgrades.tank!=="taunt")return null;
+  let t=null,bd=CONFIG.TANK_TAUNT_R*CONFIG.TANK_TAUNT_R;
+  for(const a of list){if(a.caste==="tank"){const d=dist2(x,y,a.x,a.y);if(d<bd){bd=d;t=a;}}}
+  return t;
+}
+function addPred(kind,x,y){
+  const sp=kind==="spider";
+  predators.push({kind,x,y,ang:0,alive:true,respawnT:0,cd:0,wt:0,stunT:0,
+    hp:sp?CONFIG.SPIDER_HP:CONFIG.BEETLE_HP,maxhp:sp?CONFIG.SPIDER_HP:CONFIG.BEETLE_HP,
+    atk:sp?CONFIG.SPIDER_ATK:CONFIG.BEETLE_ATK,cdMax:sp?CONFIG.SPIDER_CD:CONFIG.BEETLE_CD,
+    speed:sp?CONFIG.SPIDER_SPEED:CONFIG.BEETLE_SPEED,guard:{x,y},layer:L_OVER});
+}
+
+/* ---------------- 敌群 AI（M2-5） ---------------- */
+function enemyStep(e,dt){
+  e.phase+=dt*10;e.atkCd=Math.max(0,e.atkCd-dt);
+  if(e.stunT>0){e.stunT-=dt;return;} // M3-2 眩晕打断：眩晕中停摆（不移动不攻击）
+  // 夜间增益只作用于天敌，敌群不受昼夜 buff（保持可读的威胁节律）
+  if(e.state==="attack"){
+    // 进攻波：奔我方最近洞口 → 竖井下爬（v1.13 废除瞬移：隧道=双方共享咽喉）→ 杀向蚁后
+    let tx,ty;
+    if(e.layer===L_OVER){
+      let h=null,bd=1e9; // 最近洞口：多一口=多一个防守面（M2-1 入口策略）
+      for(const o of holes){const d=dist2(e.x,e.y,o.sx+0.5,o.sy+0.5);if(d<bd){bd=d;h=o;}}
+      // 沿途接敌：3 格内我方蚂蚁优先（嘲讽坦克在场则强制吸火——M3-2 嘲讽分支）
+      const cand=ants.filter(a=>a.layer===L_OVER);
+      const a=pickTaunt(cand,e.x,e.y)||nearestOf(cand,e.x,e.y,3);
+      if(a){tx=a.x;ty=a.y;e.tgtA=a;}
+      else{tx=h.sx+0.5;ty=h.sy+0.5;}
+      const d=Math.sqrt(dist2(e.x,e.y,tx,ty));
+      if(!a&&d<1.2){e.layer=L_UNDER;e.x=h.ux+0.5;e.y=2.6;e.shaft=h;e.ang=Math.PI/2;return;} // v1.13：落竖井顶逐格下爬（原瞬移竖井底=咽喉失效）
+      steerEnemy(e,dt,tx,ty,false);
+    }else{
+      if(e.shaft){ // v1.13 竖井下爬段：我方兵蚁可在竖井内拦截（爬行中不还手=守井战术成立）
+        e.x=e.shaft.ux+0.5;
+        if(e.y<e.shaft.uy-0.5){e.y+=CONFIG.SHAFT_CLIMB*dt;e.ang=Math.PI/2;return;}
+        e.y=e.shaft.uy+0.5;e.shaft=null;
+      }
+      const cand=ants.filter(a=>a.layer===L_UNDER);
+      const a=pickTaunt(cand,e.x,e.y)||nearestOf(cand,e.x,e.y,4);
+      const t=a||queen;
+      tx=t.x;ty=t.y;
+      if(dist2(e.x,e.y,queen.x,queen.y)<1.6){tryAttack(e,queen,dt);return;}
+      if(a&&dist2(e.x,e.y,a.x,a.y)<1.4){tryAttack(e,a,dt);return;}
+      steerEnemy(e,dt,tx,ty,false);
+      if(e.stuck>6){ // 卡死兜底：送回竖井顶重新下爬（v1.13：不再瞬移竖井底绕过防御）
+        let h=null,bd=1e9;for(const o of holes){const d=dist2(e.x,e.y,o.ux+0.5,o.uy+0.5);if(d<bd){bd=d;h=o;}}
+        e.x=h.ux+0.5;e.y=2.6;e.shaft=h;e.stuck=0;return;
+      }
+    }
+    return;
+  }
+  if(e.layer===L_OVER){
+    if(e.caste==="eworker"&&e.state==="forage"){
+      // 采集：就近有储量的地表源 → 搬回巢
+      if(e.carry>0){
+        steerEnemy(e,dt,enemyNest.x+0.5,enemyNest.y+0.5,false);
+        if(dist2(e.x,e.y,enemyNest.x,enemyNest.y)<3){enemyNest.food+=e.carry;e.carry=0;}
+        return;
+      }
+      if(!e.tgt||sTileFood[sgi(e.tgt.x,e.tgt.y)]<=0){
+        let best=null,bd=1e9;
+        for(const s of sSources){if(sTileFood[sgi(s.x,s.y)]>0){const d=dist2(e.x,e.y,s.x,s.y);if(d<bd){bd=d;best=s;}}}
+        e.tgt=best;
+      }
+      if(e.tgt){
+        const d=dist2(e.x,e.y,e.tgt.x,e.tgt.y);
+        if(d<1.5){e.timer+=dt;if(e.timer>=CONFIG.LOAD_TIME){const i=sgi(e.tgt.x,e.tgt.y);
+          e.carry=Math.min(CONFIG.CARRY,sTileFood[i]);sTileFood[i]-=e.carry;e.timer=0;}}
+        else steerEnemy(e,dt,e.tgt.x+0.5,e.tgt.y+0.5,false);
+      }else steerEnemy(e,dt,enemyNest.x+0.5,enemyNest.y+0.5,false);
+      return;
+    }
+    // esoldier / 待机：巢周巡逻
+    e.wt=(e.wt||0)-dt;
+    if(e.wt<=0){e.wt=2+rng()*3;e.pat={x:enemyNest.x+(rng()*16-8),y:enemyNest.y+(rng()*16-8)};}
+    steerEnemy(e,dt,e.pat.x,e.pat.y,false);
+  }
+}
+function steerEnemy(e,dt,tx,ty,digging){
+  const base=Math.atan2(ty-e.y,tx-e.x);
+  let da=base-e.ang;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;
+  e.ang+=clamp(da,-dt*5,dt*5);
+  tryMoveE(e,dt,digging);
+}
+function tryMoveE(e,dt,digging){
+  const sp=2*dt;
+  const nx=e.x+Math.cos(e.ang)*sp, ny=e.y+Math.sin(e.ang)*sp;
+  const pass=e.layer===L_OVER?sWalk(nx|0,ny|0):isDug(nx|0,ny|0);
+  if(pass){e.x=nx;e.y=ny;e.stuck=0;return true;}
+  // 滑移
+  for(const o of [0.9,-0.9,1.9,-1.9,2.8,-2.8]){
+    const sx=e.x+Math.cos(e.ang+o)*sp*2, sy=e.y+Math.sin(e.ang+o)*sp*2;
+    const p2=e.layer===L_OVER?sWalk(sx|0,sy|0):isDug(sx|0,sy|0);
+    if(p2){e.ang+=o*0.5;e.x+=Math.cos(e.ang)*sp*0.7;e.y+=Math.sin(e.ang)*sp*0.7;return true;}
+  }
+  e.stuck+=dt;
+  return false;
+}
+function nearestOf(list,x,y,r){
+  let best=null,bd=r*r;
+  for(const o of list){const d=dist2(x,y,o.x,o.y);if(d<bd){bd=d;best=o;}}
+  return best;
+}
+function tryAttack(att,tgt,dt){
+  if(att.atkCd>0)return;
+  att.atkCd=att.cdMax||att.cd||1;
+  if(tgt&&tgt.caste&&!tgt.caste.startsWith("e")&&ants.includes(tgt))damageAnt(tgt,att.atk); // 我方蚁走减伤/闪避结算
+  else{tgt.hp-=att.atk;if(tgt.lastHitT!==undefined)tgt.lastHitT=simTime;}
+  if(tgt.hp<=0)onDeath(tgt,att);
+}
+// M3-3 我方蚁受击统一结算：警觉闪避（worker）/坚壁减伤（soldier）
+function damageAnt(a,dmg){
+  if(a.caste==="worker"&&jellyUpgrades.worker==="alert"&&rng()<CONFIG.EVADE)return; // 闪避：伤害归零
+  if(a.caste==="soldier"&&jellyUpgrades.soldier==="wall")dmg*=1-CONFIG.SOLDIER_ARMOR;
+  a.hp-=dmg;a.lastHitT=simTime;
+}
+// 死亡结算
+function onDeath(u,killer){
+  if(u.kind==="spider"||u.kind==="beetle"){ // 天敌：尸体+重生（不可根除）
+    u.alive=false;u.respawnT=CONFIG.PRED_RESPAWN;
+    if(killer&&killer.group!==undefined){kills++;jelly+=CONFIG.JELLY_PRED;jellyEarned+=CONFIG.JELLY_PRED; // v1.21 猎杀天敌=王浆渠道
+      toast("🍯 猎杀"+(u.kind==="spider"?"蜘蛛":"甲虫")+"——王浆 +1（当前 "+jelly+"）");}
+    pushCorpse(u.x,u.y,L_OVER);
+    return;
+  }
+  if(u===queen){queen.hp=0;endGame(false);return;}
+  if(u===enemyNest){enemyNest.dead=true;endGame(true);return;}
+  if(u.caste&&u.caste.startsWith("e")){ // 敌蚁
+    const i=enemies.indexOf(u);if(i>=0)enemies.splice(i,1);
+    if(killer&&killer.group!==undefined)kills++;
+    pushCorpse(u.x,u.y,u.layer);
+    return;
+  }
+  const i=ants.indexOf(u); // 我方蚁
+  if(i>=0){
+    if(u.state==="dig")releaseDig(u.tgt); // 防 claim 泄漏
+    ants.splice(i,1);pushCorpse(u.x,u.y,u.layer);
+  }
+}
+function pushCorpse(x,y,layer){
+  if(corpses.length>=CONFIG.CORPSE_CAP)corpses.shift();
+  corpses.push({x,y,layer,ang:rng()*6.283,timer:CONFIG.CORPSE_T});
+}
+// 敌群经济与波次（每 1s tick；M3-4 策略模板：growth/兵种配比/波强可辨识）
+function enemyHiveTick(dt){
+  if(enemyNest.dead)return;
+  enemyNest.food+=CONFIG.E_GROWTH*DIFF.scale*STRAT.growth*dt;
+  // 扩军（兵蚁配比由策略定：经济型攒工蚁、侵略型堆兵蚁）
+  enemyNest.hatchT=Math.max(0,(enemyNest.hatchT||0)-dt);
+  const ew=enemies.filter(e=>e.caste==="eworker").length, es=enemies.filter(e=>e.caste==="esoldier").length;
+  const cap=Math.round(DIFF.cap*endlessScale);
+  if(enemyNest.hatchT<=0&&enemies.length<cap){
+    if(enemyNest.food>=CONFIG.E_COST_SOLDIER&&es<cap*STRAT.soldierFrac){enemyNest.food-=CONFIG.E_COST_SOLDIER;addEnemy(enemyNest.x,enemyNest.y,"esoldier");enemyNest.hatchT=CONFIG.E_HATCH_T;}
+    else if(enemyNest.food>=CONFIG.E_COST_WORKER){enemyNest.food-=CONFIG.E_COST_WORKER;addEnemy(enemyNest.x,enemyNest.y,"eworker");enemyNest.hatchT=CONFIG.E_HATCH_T;}
+  }
+  // 进攻波
+  waveTimer-=dt;
+  if(waveTimer<=0){
+    waveNo++;
+    waveTimer=DIFF.wave*Math.pow(CONFIG.ENDLESS_WAVE_K,waveNo)*STRAT.waveMul;
+    triggerWave();
+    scheduleTitan();
+  }
+}
+function triggerWave(){
+  const force=enemies.filter(e=>e.caste==="esoldier"||(e.caste==="eworker"&&rng()<0.5));
+  for(const e of force)e.state="attack";
+  if(force.length>0)toast("⚠ 敌群进攻！"+force.length+" 只敌蚁来袭");
+  sfxWave=1.2;
+}
+// M3-5 巨兽登场调度：波数达标且未登场过 → 预告 90s 后从远角进场（一局一次）
+function scheduleTitan(){
+  if(titanAnnounced||waveNo<CONFIG.TITAN_WAVE_MIN)return;
+  titanAnnounced=true;titanTimer=CONFIG.TITAN_DELAY;
+  toast("📢 远处传来低鸣……巨兽正在逼近（"+CONFIG.TITAN_DELAY+"s 后抵达地表）");
+}
+function spawnTitan(){
+  // 从离敌巢最近的地图边缘进场；玩家蚁群聚集地=主洞口方向
+  const home=holes[0];
+  const edge={x:clamp(home.sx+(home.sx<SGW/2?-12:12),2,SGW-3),y:clamp(home.sy+(home.sy<SGH/2?-12:12),2,SGH-3)};
+  titan={kind:"titan",x:edge.x,y:edge.y,ang:0,phase:0,cd:0,atk:CONFIG.TITAN_ATK,hp:CONFIG.TITAN_HP,maxhp:CONFIG.TITAN_HP,
+    eatT:0,alive:true,lifeT:CONFIG.TITAN_LEAVE,layer:L_OVER,aoeT:0};
+  toast("🐸 巨兽现身！它会吞食蚂蚁回血——吞食瞬间是集火窗口");
+}
+function stepTitan(p,dt){
+  if(!p.alive)return;
+  p.lifeT-=dt;
+  if(p.lifeT<=0){ // 防死局：超时离场
+    p.alive=false;titan=null;toast("巨兽离开了（它没找到入口）");return;
+  }
+  p.phase=(p.phase||0)+dt*6;p.cd=Math.max(0,p.cd-dt);p.aoeT=Math.max(0,p.aoeT-dt);
+  if(p.eatT>0){ // 吞食爆发窗：站定，受伤 ×3（TITAN_VULN 在受击结算处）
+    p.eatT-=dt;return;
+  }
+  // 索敌：3.5 格内任何蚂蚁 → 拍打（AoE）
+  const cand=[...ants.filter(a=>a.layer===L_OVER),...enemies.filter(e=>e.layer===L_OVER)];
+  const t=nearestOf(cand,p.x,p.y,3.5);
+  let tx,ty;
+  if(t){tx=t.x;ty=t.y;}
+  else{ // 无猎物：徘徊向主洞口（封锁地表+施压）
+    const home=holes[0];tx=home.sx+0.5;ty=home.sy+0.5;
+    if(dist2(p.x,p.y,tx,ty)<64){ // 到达洞口外圈：站定威慑
+      if(p.cd<=0){p.cd=CONFIG.TITAN_CD;p.aoeT=0.4;}
+      return;
+    }
+  }
+  if(t&&p.cd<=0&&dist2(p.x,p.y,t.x,t.y)<CONFIG.TITAN_AOE_R*CONFIG.TITAN_AOE_R){
+    p.cd=CONFIG.TITAN_CD;p.aoeT=0.4; // AoE 拍打：范围内部单位全吃
+    const victims=[...ants.filter(a=>a.layer===L_OVER&&dist2(a.x,a.y,p.x,p.y)<CONFIG.TITAN_AOE_R*CONFIG.TITAN_AOE_R),
+                   ...enemies.filter(e=>e.layer===L_OVER&&dist2(e.x,e.y,p.x,p.y)<CONFIG.TITAN_AOE_R*CONFIG.TITAN_AOE_R)];
+    let eaten=0;
+    for(const v of victims){
+      if(v.caste&&!v.caste.startsWith("e"))damageAnt(v,p.atk);else v.hp-=p.atk;
+      if(v.lastHitT!==undefined)v.lastHitT=simTime;
+      if(v.hp<=0){eaten++;onDeath(v,p);}
+    }
+    if(eaten>0){ // 吞食回血+爆发窗开启（机制解：喂蚂蚁=玩家决策，吞食时 ×3 集火）
+      p.hp=Math.min(p.maxhp,p.hp+eaten*CONFIG.TITAN_EAT_HEAL);p.eatT=CONFIG.TITAN_EAT_T;titanEatSeen++;
+      toast("🐸 巨兽吞食了 "+eaten+" 只蚂蚁（回血 "+(eaten*CONFIG.TITAN_EAT_HEAL)+"）——趁它进食集火！");
+    }
+    return;
+  }
+  const d=Math.sqrt(dist2(p.x,p.y,tx,ty));
+  if(d>1){
+    const base=Math.atan2(ty-p.y,tx-p.x);
+    let da=base-p.ang;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;
+    p.ang+=clamp(da,-dt*3,dt*3);
+    const nx=p.x+Math.cos(p.ang)*CONFIG.TITAN_SPD*dt, ny=p.y+Math.sin(p.ang)*CONFIG.TITAN_SPD*dt;
+    if(sWalk(nx|0,ny|0)){p.x=nx;p.y=ny;}
+    else p.ang+=(rng()-0.5)*2;
+  }
+}
+// 巨兽受击结算（伤害 ×3 爆发窗 + 击杀奖励）
+function damageTitan(p,dmg){
+  p.hp-=dmg*(p.eatT>0?CONFIG.TITAN_VULN:1);
+  if(p.hp<=0){
+    p.alive=false;titan=null;
+    jelly+=CONFIG.JELLY_TITAN;jellyEarned+=CONFIG.JELLY_TITAN;
+    kills++;
+    toast("🏆 巨兽被击倒！王浆 +"+CONFIG.JELLY_TITAN+"——它的残骸成了大餐（就地可采 "+TITAN_FOOD+" 食物）");
+    sSources.push({x:Math.round(p.x),y:Math.round(p.y),r:1.5,cap:TITAN_FOOD,kind:"corpse"});
+    sTileFood[sgi(Math.round(p.x),Math.round(p.y))]=TITAN_FOOD;
+    carveClear(Math.round(p.x),Math.round(p.y));
+    dirtySur=true;
+  }
+}
+const TITAN_FOOD=500; // [PH] 巨兽残骸食物储量（一次性大奖励）
+let sfxWave=0;
+
+/* ---------------- 天敌 AI（M2-4） ---------------- */
+function predStep(p,dt){
+  if(!p.alive){
+    p.respawnT-=dt;
+    if(p.respawnT<=0){p.alive=true;p.hp=p.maxhp;p.x=p.guard.x;p.y=p.guard.y;}
+    return;
+  }
+  p.phase=(p.phase||0)+dt*8;p.cd=Math.max(0,p.cd-dt);
+  if(p.stunT>0){p.stunT-=dt;return;} // M3-2 眩晕对天敌同样生效（巨兽免疫——防单坦克永动控）
+  const buff=isNight()?CONFIG.NIGHT_BUFF:1;
+  const atk=p.atk*buff, spd=p.speed*buff;
+  // 索敌：4-5 格内任何蚂蚁（我方/敌方）
+  const cand=[...ants.filter(a=>a.layer===L_OVER),...enemies.filter(e=>e.layer===L_OVER)];
+  const t=nearestOf(cand,p.x,p.y,p.kind==="spider"?4.5:3.5);
+  if(t&&p.cd<=0&&dist2(p.x,p.y,t.x,t.y)<1.8){
+    if(t.caste&&!t.caste.startsWith("e"))damageAnt(t,atk);else t.hp-=atk;
+    if(t.lastHitT!==undefined)t.lastHitT=simTime;
+    if(t.hp<=0)onDeath(t,p);
+    p.cd=p.cdMax;
+    return;
+  }
+  let tx,ty;
+  if(t&&dist2(p.x,p.y,t.x,t.y)<64){tx=t.x;ty=t.y;} // 追击 8 格内
+  else if(p.kind==="spider"){tx=p.guard.x;ty=p.guard.y;}
+  else{ // 甲虫游荡
+    p.wt-=dt;
+    if(p.wt<=0){p.wt=3+rng()*4;p.wpat={x:8+rng()*(SGW-16),y:8+rng()*(SGH-16)};}
+    tx=p.wpat.x;ty=p.wpat.y;
+  }
+  const d=Math.sqrt(dist2(p.x,p.y,tx,ty));
+  if(d>1){const base=Math.atan2(ty-p.y,tx-p.x);
+    let da=base-p.ang;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;
+    p.ang+=clamp(da,-dt*4,dt*4);
+    const nx=p.x+Math.cos(p.ang)*spd*dt, ny=p.y+Math.sin(p.ang)*spd*dt;
+    if(sWalk(nx|0,ny|0)){p.x=nx;p.y=ny;}
+    else{p.ang+=(rng()-0.5)*2;}
+  }
+}
+
+/* ---------------- 我方蚂蚁 AI（M1 状态机 + 双层 + 战斗规则） ---------------- */
+function antStep(a,dt){
+  a.phase+=dt*10;a.atkCd=Math.max(0,a.atkCd-dt);
+  a.rule=groups[a.group].rule; // 组规则实时下发（M2-8）
+  if(a.caste==="tank"&&jellyUpgrades.tank==="taunt"&&a.hp<a.maxhp)a.hp=Math.min(a.maxhp,a.hp+CONFIG.TANK_REGEN*dt); // M3-2 嘲讽型转火回血
+  // v1.19 脱战回血：受击 5s 未再受击 → 2 HP/s（战损可恢复，多口防守可持续；回血中若再受击 lastHitT 刷新自动中断）
+  if(a.hp<a.maxhp&&simTime-a.lastHitT>=CONFIG.REGEN_DELAY)a.hp=Math.min(a.maxhp,a.hp+CONFIG.REGEN_RATE*dt);
+  // ---- 战斗规则介入 ----
+  if(a.rule==="combat"||a.rule==="both"){
+    const r=a.rule==="combat"?CONFIG.AGGRO_R:CONFIG.BOTH_R;
+    if(!a.tgtE||a.tgtE.hp<=0||(a.tgtE.alive===false))a.tgtE=nearestFoe(a,r);
+    if(a.tgtE){fightStep(a,a.tgtE,dt);return;}
+    if(a.rule==="combat"&&a.state!=="dig"&&a.carry<=0){
+      // 无敌人：向当前队标记驻扎（守家语义）；到位后原地站定不再掉进游荡逻辑（v1.12 抖动修复③）
+      const m=markers.find(m=>m.group===a.group&&m.layer===a.layer);
+      if(m){
+        const dd=dist2(a.x,a.y,m.x,m.y);
+        if(dd>25){steerAnt(a,dt,m.x,m.y,0,false);return;} // >5格外：走过去
+        if(dd>4){a.ang+=(rng()-0.5)*dt*1.5;a.slowK=0.4;tryMove(a,dt,false);a.slowK=1;return;} // 2~5格：缓步微调
+        return; // 2格内：站定
+      }
+    }
+  }else if(a.rule==="forage"&&simTime-a.lastHitT<CONFIG.RETALIATE_T){
+    const e=nearestFoe(a,CONFIG.RETALIATE_R);
+    if(e){fightStep(a,e,dt);return;}
+  }
+  if(a.layer===L_UNDER){
+    antStepUnder(a,dt);
+  }else{
+    antStepOver(a,dt);
+  }
+}
+// 索敌：地表=敌蚁/天敌/敌巢；地下=敌蚁
+function nearestFoe(a,r){
+  let best=null,bd=r*r;
+  if(a.layer===L_OVER){
+    for(const e of enemies){if(e.layer===L_OVER){const d=dist2(a.x,a.y,e.x,e.y);if(d<bd){bd=d;best=e;}}}
+    for(const p of predators){if(p.alive){const d=dist2(a.x,a.y,p.x,p.y);if(d<bd){bd=d;best=p;}}}
+    if(titan&&titan.alive){const d=dist2(a.x,a.y,titan.x,titan.y);if(d<bd){bd=d;best=titan;}} // M3-5 巨兽可被索敌
+    if(!best&&enemyNest&&!enemyNest.dead&&dist2(a.x,a.y,enemyNest.x,enemyNest.y)<r*r*4)best=enemyNest; // 巢可打（2× 索敌半径）
+  }else{
+    for(const e of enemies){if(e.layer===L_UNDER){const d=dist2(a.x,a.y,e.x,e.y);if(d<bd){bd=d;best=e;}}}
+  }
+  return best;
+}
+function fightStep(a,e,dt){
+  const range=statOf(a,"range");
+  const d=dist2(a.x,a.y,e.x,e.y);
+  if(d<range*range){
+    if(a.atkCd<=0){
+      a.atkCd=statOf(a,"cd");
+      if(a.caste==="ranged"){ // M3-1 远程：蚁酸弹道（弹道伤害走命中结算，可被位移目标甩开一线）
+        projectiles.push({x:a.x,y:a.y,tgt:e,dmg:statOf(a,"atk"),spd:CONFIG.PROJ_SPEED,mine:true,life:2,src:a});
+        projFired++;
+      }else{
+        e.hp-=statOf(a,"atk");
+        if(a.caste==="tank"&&jellyUpgrades.tank==="stun"&&e.kind!=="titan"){ // M3-2/3 眩晕打断（巨兽免疫）
+          if(e.stunT===undefined)e.stunT=0;
+          if(rng()<CONFIG.TANK_STUN_CHANCE){e.stunT=CONFIG.STUN_T;stunSeen++;}
+        }
+        if(e.lastHitT!==undefined)e.lastHitT=simTime;
+        if(e.hp<=0)onDeath(e,a);
+      }
+    }
+    return;
+  }
+  steerAnt(a,dt,e.x,e.y,0,false);
+}
+function antStepUnder(a,dt){
+  const f=phU;
+  // 竖井爬升：仅 goup 状态（从竖井底进入的"上行"意图）——防过路蚁被整列吸走
+  const hUp=holeAtUx(a.x|0);
+  if(hUp&&a.state==="goup"&&Math.abs(a.x-(hUp.ux+0.5))<1.0&&a.y<=hUp.uy+1.2){
+    a.y-=CONFIG.SHAFT_CLIMB*dt;a.ang=-Math.PI/2;
+    if(a.y<=2.6){
+      a.layer=L_OVER;a.x=hUp.sx+0.5;a.y=hUp.sy+0.5;a.state="idle";a.timer=0;a.tgt=null;a.stuck=0;
+    }
+    return;
+  }
+  if(a.state==="idle"){
+    a.timer-=dt;
+    if(a.timer<=0){
+      const d=claimDig(a);
+      if(d){a.state="dig";a.tgt=d;return;}
+      if(markers.some(m=>m.layer===L_UNDER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP){a.state="forage";return;}
+      if(markers.some(m=>m.layer===L_OVER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP){a.state="goup";return;} // 本组地表有活儿：上行
+      a.timer=1+rng()*2;a.ang=rng()*6.283;
+    }
+    moveSteer(a,dt,NEST.x,NEST.y,2.5);
+    return;
+  }
+  if(a.state==="goup"){ // 奔最近竖井底 → 爬升分支接管
+    let h2=null,bd=1e9;
+    for(const hh of holes){const d=dist2(a.x,a.y,hh.ux+0.5,hh.uy+0.5);if(d<bd){bd=d;h2=hh;}}
+    steerAnt(a,dt,h2.ux+0.5,h2.uy+0.5,0,false);
+    return;
+  }
+  if(a.state==="dig"){
+    const ti=a.tgt;
+    if(tile[ti]!==T_SOIL||!digReq[ti]){releaseDig(ti);a.state="idle";a.timer=0;a.tgt=null;return;}
+    const tx=ti%GW, ty=(ti/GW)|0;
+    const d2=dist2(a.x,a.y,tx+0.5,ty+0.5);
+    if(d2<1.1){
+      digWork[ti]+=dt;
+      if(rng()<dt*6)spawnDust(tx,ty,L_UNDER);
+      if(digWork[ti]>=CONFIG.DIG_WORK){digTile(ti);releaseDig(ti);a.state="idle";a.timer=0;a.tgt=null;}
+      return;
+    }
+    moveToward(a,dt,tx+0.5,ty+0.5,true);
+    return;
+  }
+  if(a.state==="forage"){
+    if(a.carry>0){a.state="return";return;}
+    let mx=null,md=1e9;
+    for(const m of markers){if(m.layer===L_UNDER&&m.group===a.group){const d=dist2(a.x,a.y,m.x,m.y);if(d<md){md=d;mx=m;}}}
+    if(!mx){a.state="idle";a.timer=0;return;}
+    if(md<25){
+      const fi=findFoodNearU(mx.x,mx.y,7);
+      if(fi!=null){
+        const fx=fi%GW,fy=(fi/GW)|0;
+        if(dist2(a.x,a.y,fx+0.5,fy+0.5)<1.2){
+          a.timer+=dt;
+          if(a.timer>=loadTime()){
+            const take=Math.min(workerCarry(),tileFood[fi]);
+            tileFood[fi]-=take;a.carry=take;a.carryFrom=L_UNDER;a.state="return";a.timer=0;
+          }
+          return;
+        }
+        moveToward(a,dt,fx+0.5,fy+0.5,false);
+        phDeposit(f,f.home,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
+        return;
+      }
+    }
+    const turn=phSense(f,f.food,a.x,a.y,a.ang,isDug);
+    steerAnt(a,dt,mx.x,mx.y,turn,false);
+    phDeposit(f,f.home,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
+    return;
+  }
+  if(a.state==="return"){
+    if(a.carry<=0){a.state="idle";a.timer=0;return;}
+    const turn=phSense(f,f.home,a.x,a.y,a.ang,isDug);
+    steerAnt(a,dt,NEST.x,NEST.y,turn,true);
+    phDeposit(f,f.food,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
+    if(dist2(a.x,a.y,NEST.x,NEST.y)<2.2){
+      stock=Math.min(CONFIG.STOCK_CAP,stock+a.carry);
+      if(a.carryFrom!==L_OVER)collected+=a.carry; // 地表产量已计入 collectedS，不双计
+      a.carry=0;a.state="forage";a.timer=0;
+      if(!markers.some(m=>m.layer===L_UNDER)||stock>=CONFIG.STOCK_CAP)a.state="idle";
+    }
+    return;
+  }
+}
+function antStepOver(a,dt){
+  const f=phS;
+  if(a.state==="idle"){
+    a.timer-=dt;
+    if(a.timer<=0){
+      const hasMark=markers.some(m=>m.layer===L_OVER&&m.group===a.group);
+      if(hasMark&&stock<CONFIG.STOCK_CAP&&!(isNight()&&a.rule!=="combat")){a.state="forage";return;}
+      if(isNight()&&a.rule!=="combat"||!hasMark){a.state="return";return;} // 夜间收缩回地下 / 本组无地表标记回地下
+      a.timer=1+rng()*2;a.ang=rng()*6.283;
+    }
+    // 无事：在洞口附近游荡（地表不深逛）
+    const h=holes[0];
+    moveSteerOver(a,dt,h.sx,h.sy,4);
+    return;
+  }
+  if(a.state==="forage"){
+    if(a.carry>0){a.state="return";return;}
+    // 夜间自动收缩（M2-7）：采集/兼顾组夜间概率折返
+    if(isNight()&&a.rule!=="combat"&&rng()<CONFIG.NIGHT_RETURN_P*dt*10){a.state="return";return;}
+    let mx=null,md=1e9;
+    for(const m of markers){if(m.layer===L_OVER&&m.group===a.group){const d=dist2(a.x,a.y,m.x,m.y);if(d<md){md=d;mx=m;}}}
+    if(!mx){a.state="idle";a.timer=0;return;}
+    if(md<36){
+      const fi=findFoodNearS(mx.x,mx.y,9);
+      if(fi!=null){
+        const fx=fi%SGW,fy=(fi/SGW)|0;
+        if(dist2(a.x,a.y,fx+0.5,fy+0.5)<1.2){
+          a.timer+=dt;
+          if(a.timer>=loadTime()){
+            const take=Math.min(workerCarry(),sTileFood[fi]);
+            sTileFood[fi]-=take;a.carry=take;a.carryFrom=L_OVER;a.state="return";a.timer=0;
+          }
+          return;
+        }
+        steerAnt(a,dt,fx+0.5,fy+0.5,0,false);
+        phDeposit(f,f.home,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
+        return;
+      }
+    }
+    const turn=phSense(f,f.food,a.x,a.y,a.ang,sWalk);
+    steerAnt(a,dt,mx.x,mx.y,turn,false);
+    phDeposit(f,f.home,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
+    return;
+  }
+  if(a.state==="return"){
+    // 奔最近洞口（有粮入库，无粮回家）→ 进洞切地下
+    let h=null,bd=1e9;
+    for(const hh of holes){const d=dist2(a.x,a.y,hh.sx+0.5,hh.sy+0.5);if(d<bd){bd=d;h=hh;}}
+    const turn=phSense(f,f.home,a.x,a.y,a.ang,sWalk);
+    steerAnt(a,dt,h.sx+0.5,h.sy+0.5,turn,false);
+    phDeposit(f,f.food,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
+    if(bd<1.4){
+      a.layer=L_UNDER;a.x=h.ux+0.5;a.y=h.uy+0.5;a.stuck=0;
+      collectedS+=a.carry; // 地表产量进洞即计
+      a.state=a.carry>0?"return":"idle";a.timer=0; // 有粮继续回蚁后室入库（不丢粮）
+    }
+    return;
+  }
+}
+function steerAnt(a,dt,tx,ty,pherTurn,homing){
+  const base=Math.atan2(ty-a.y,tx-a.x);
+  // v1.14 转圈根治：信息素改为目标方向上的转向偏置（原实现 pherTurn≠0 时 want=a.ang+偏置，
+  // 目标角被完全丢弃——蚂蚁沿自己撒出的环状信息素场绕圈且边转边撒，形成自强化转圈吸引子）
+  const want=base+pherTurn*CONFIG.PHER_FOLLOW;
+  a.wa+=(rng()-0.5)*CONFIG.WANDER*dt*8;
+  a.wa*=0.95;
+  a.ang=want+a.wa*0.15;
+  tryMove(a,dt,homing);
+}
+function moveSteer(a,dt,tx,ty,range){
+  if(dist2(a.x,a.y,tx,ty)>range*range){steerAnt(a,dt,tx,ty,0,false);}
+  else{a.ang+=(rng()-0.5)*dt*1.5;a.slowK=0.4;tryMove(a,dt,false);a.slowK=1;} // 巢内缓步+慢转向（v1.12 抖动修复：原每帧±2.3°随机转+边界振荡）
+}
+function moveSteerOver(a,dt,tx,ty,range){
+  if(dist2(a.x,a.y,tx,ty)>range*range){steerAnt(a,dt,tx,ty,0,false);}
+  else{a.ang+=(rng()-0.5)*dt*1.5;a.slowK=0.4;tryMoveOver(a,dt,false);a.slowK=1;} // 洞口缓步（同抖动修复）
+}
+function moveToward(a,dt,tx,ty,digging){
+  const d=Math.atan2(ty-a.y,tx-a.x);
+  let da=d-a.ang;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;
+  a.ang+=clamp(da,-dt*6,dt*6);
+  return tryMove(a,dt,digging);
+}
+function antSpeed(a){
+  const base=CONFIG.ANT_SPEED*statOf(a,"spd");
+  return base*(a.slowK||1); // slowK：巢内/驻扎缓步（v1.12 抖动修复）
+}
+function tryMove(a,dt,digging){ // 分层派发：地表蚂蚁走俯视移动
+  if(a.layer===L_OVER)return tryMoveOver(a,dt,digging);
+  const sp=antSpeed(a)*dt;
+  const nx=a.x+Math.cos(a.ang)*sp, ny=a.y+Math.sin(a.ang)*sp;
+  const txi=nx|0, tyi=ny|0;
+  if(isDug(txi,tyi)){a.x=nx;a.y=ny;a.stuck=0;return true;}
+  if(isRock(txi,tyi)){a.ang+=2.5;a.stuck+=dt;return false;}
+  if(digging){
+    const ti=gi(txi,tyi);
+    digWork[ti]+=dt;
+    if(rng()<dt*6)spawnDust(txi,tyi,L_UNDER);
+    if(digWork[ti]>=CONFIG.DIG_WORK)digTile(ti);
+    a.stuck+=dt*0.2;
+    return false;
+  }
+  const offs=[0.9,-0.9,1.9,-1.9,2.8,-2.8];
+  for(const o of offs){
+    const sxx=a.x+Math.cos(a.ang+o)*sp*2, syy=a.y+Math.sin(a.ang+o)*sp*2;
+    if(isDug(sxx|0,syy|0)){a.ang+=o*0.5;a.x+=Math.cos(a.ang)*sp*0.7;a.y+=Math.sin(a.ang)*sp*0.7;return true;}
+  }
+  a.stuck+=dt;
+  if(a.stuck>CONFIG.STUCK_RESCUE){
+    a.x=NEST.x+(rng()*4-2);a.y=NEST.y+(rng()*2-1);a.stuck=0;a.state="idle";a.timer=0;rescues++;
+  }
+  return false;
+}
+function tryMoveOver(a,dt,digging){ // 地表：障碍滑移+卡死救援（回洞口）
+  const sp=antSpeed(a)*dt;
+  const nx=a.x+Math.cos(a.ang)*sp, ny=a.y+Math.sin(a.ang)*sp;
+  if(sWalk(nx|0,ny|0)){a.x=nx;a.y=ny;a.stuck=0;return true;}
+  const offs=[0.9,-0.9,1.9,-1.9,2.8,-2.8];
+  for(const o of offs){
+    const sxx=a.x+Math.cos(a.ang+o)*sp*2, syy=a.y+Math.sin(a.ang+o)*sp*2;
+    if(sWalk(sxx|0,syy|0)){a.ang+=o*0.5;a.x+=Math.cos(a.ang)*sp*0.7;a.y+=Math.sin(a.ang)*sp*0.7;return true;}
+  }
+  a.stuck+=dt;
+  if(a.stuck>CONFIG.STUCK_RESCUE){ // 卡死救援：传送最近洞口（多入口）
+    let h2=null,bd=1e9;
+    for(const hh of holes){const d=dist2(a.x,a.y,hh.sx,hh.sy);if(d<bd){bd=d;h2=hh;}}
+    a.x=h2.sx+0.5;a.y=h2.sy+0.5;a.stuck=0;a.state="idle";a.timer=0;rescues++;
+  }
+  return false;
+}
+function claimDig(a){
+  let best=-1,bd=1e9;
+  for(let i=0;i<GW*GH;i++){
+    if(digReq[i]&&tile[i]===T_SOIL&&!digClaims.has(i)){
+      const x=i%GW,y=(i/GW)|0;
+      const d=dist2(a.x,a.y,x,y);
+      if(d<bd){bd=d;best=i;}
+    }
+  }
+  if(best>=0){digClaims.set(best,a);return best;}
+  return null;
+}
+function releaseDig(ti){if(digClaims.get(ti)){digClaims.delete(ti);}}
+function digTile(ti){
+  tile[ti]=T_AIR;digReq[ti]=0;digWork[ti]=0;dirtyMap=true;dugCount++;
+}
+function findFoodNearU(cx,cy,r){
+  let best=-1,bd=r*r;
+  const x0=Math.max(0,(cx-r)|0),x1=Math.min(GW-1,(cx+r)|0);
+  const y0=Math.max(0,(cy-r)|0),y1=Math.min(GH-1,(cy+r)|0);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const i=gi(x,y);
+    if(tileFood[i]>0&&isDug(x,y)){const d=dist2(cx,cy,x+0.5,y+0.5);if(d<bd){bd=d;best=i;}}
+  }
+  return best;
+}
+function findFoodNearS(cx,cy,r){
+  let best=-1,bd=r*r;
+  const x0=Math.max(0,(cx-r)|0),x1=Math.min(SGW-1,(cx+r)|0);
+  const y0=Math.max(0,(cy-r)|0),y1=Math.min(SGH-1,(cy+r)|0);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const i=sgi(x,y);
+    if(sTileFood[i]>0&&sTile[i]===S_GRASS){const d=dist2(cx,cy,x+0.5,y+0.5);if(d<bd){bd=d;best=i;}}
+  }
+  return best;
+}
+function activeR(){
+  let r=0;
+  for(const s of sources)if(isDug(s.x,s.y))r+=s.r;
+  for(const s of sSources)if(sTileFood[sgi(s.x,s.y)]>0&&explored[sgi(s.x,s.y)])r+=s.r; // 未探索的地表源不计收入
+  return r;
+}
+/* ---------------- 尘土粒子 ---------------- */
+function spawnDust(tx,ty,layer){
+  if(dust.length>=80)return;
+  dust.push({x:tx+0.5+(rng()-.5)*.6,y:ty+0.5+(rng()-.5)*.6,vx:(rng()-.5)*1.5,vy:-rng()*1.8,life:.5+rng()*.5,layer});
+}
+/* ---------------- 玩家操作 ---------------- */
+let tool="mark", view=L_UNDER, inGame=false;
+let speed=1, paused=false, userPaused=false, devMode=false, showPher=false;
+const canvas=document.getElementById("game");
+const toastEl=document.getElementById("toast");
+let toastT=0;
+function toast(msg){toastEl.textContent=msg;toastEl.style.display="block";toastT=2.4;}
+
+function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
+  if(tool==="transfer"){ // 调蚁（2026-10-11 战神反馈「单独控制三队」）：其他队各抽 50% 调入当前队，不依赖格子
+    let moved=0;
+    for(const a of ants){
+      if(a.group!==curGroup&&rng()<0.5){a.group=curGroup;moved++;}
+    }
+    const cnt=[0,0,0];for(const a of ants)cnt[a.group]++;
+    toast(`调蚁 → ${groups[curGroup].name}：+${moved} 只 ｜ 各队 ${cnt[0]}/${cnt[1]}/${cnt[2]}（蚁身色环=队伍）`);
+    return;
+  }
+  const under=view===L_UNDER;
+  const W=under?GW:SGW, H=under?GH:SGH;
+  const tx=wx|0, ty=wy|0;
+  if(!inGrid(tx,ty)&&!inSur(tx,ty))return;
+  if(under){
+    const ti=gi(tx,ty);
+    if(tool==="mark"){
+      if(markers.length>=CONFIG.MAX_MARKERS){toast("标记最多 "+CONFIG.MAX_MARKERS+" 个");return;}
+      markers.push({x:tx+0.5,y:ty+0.5,layer:L_UNDER,group:curGroup});toast(groups[curGroup].name+" 采集标记（地下）");
+    }else if(tool==="dig"){
+      if(tile[ti]===T_SOIL)digReq[ti]=1;
+      else if(tile[ti]===T_ROCK)toast("基岩无法挖掘");
+      else if(tile[ti]===T_SHAFT)toast("竖井无需挖掘");
+    }else if(tool==="nursery"){
+      if(!isDug(tx,ty)||isShaft(tx,ty)){toast("需在挖空的地面上建造");return;}
+      if(nurseries.some(n=>n.ti===ti)){toast("这里已有育婴格");return;}
+      if(stock<CONFIG.NURSERY_COST){toast("食物不足（需 "+CONFIG.NURSERY_COST+"）");return;}
+      stock-=CONFIG.NURSERY_COST;nurseries.push({ti});
+    }else if(tool==="egg"||tool==="eggs"||tool==="eggr"||tool==="eggt"){
+      const caste={egg:"worker",eggs:"soldier",eggr:"ranged",eggt:"tank"}[tool];
+      const cost=CASTE_STATS[caste].cost;
+      const n=nurseries.find(n=>n.ti===ti&&!broods.some(b=>b.ti===ti));
+      if(!n){toast("点击空的育婴格放卵");return;}
+      if(queenCd>0){toast("蚁后产卵冷却中 "+queenCd.toFixed(1)+"s");return;}
+      if(stock<cost){toast("食物不足（需 "+cost+"）");return;}
+      if(popCount()>=nurseries.length){toast("育婴格已满，先造格（人口=育婴格数）");return;}
+      stock-=cost;queenCd=CONFIG.LAY_COOLDOWN;
+      broods.push({ti,stage:0,timer:CONFIG.BROOD_EGG,caste,group:curGroup});
+      toast(CASTE_CN[caste]+"卵 → "+groups[curGroup].name);
+    }else if(tool==="hole"){
+      if(!isDug(tx,ty)||isShaft(tx,ty)){toast("竖井入口需建在挖空的地面（将向上整列打通）");return;}
+      if(holes.some(h=>Math.abs(h.ux-tx)<3&&Math.abs(h.uy-ty)<3)){toast("距现有入口太近");return;}
+      if(stock<CONFIG.HOLE_COST){toast("食物不足（需 "+CONFIG.HOLE_COST+"）");return;}
+      stock-=CONFIG.HOLE_COST;
+      const h={ux:tx,uy:ty,sx:clamp(tx,6,SGW-6),sy:clamp(70+(rng()*36-18)|0,6,SGH-6)};
+      holes.push(h);digShaft(h);carveClear(h.sx,h.sy);
+      toast("新入口打通（地下 x="+tx+" → 地表）");
+    }else if(tool==="demolish"){
+      const ni=nurseries.findIndex(n=>n.ti===ti);
+      if(ni>=0){
+        const bi=broods.findIndex(b=>b.ti===ti);
+        if(bi>=0){toast("⚠ 格内有幼体，将一并销毁（二次点按确认）");
+          if(!toolAt._confirm){toolAt._confirm=2;setTimeout(()=>toolAt._confirm=0,2500);return;}
+          toolAt._confirm=0;broods.splice(bi,1);}
+        nurseries.splice(ni,1);stock+=CONFIG.NURSERY_REFUND;
+        toast("育婴格已拆除（返 "+CONFIG.NURSERY_REFUND+"）");
+      }else{
+        const mi=markers.findIndex(m=>m.layer===L_UNDER&&dist2(m.x,m.y,tx+0.5,ty+0.5)<2);
+        if(mi>=0){markers.splice(mi,1);toast("标记已移除");}
+        else if(digReq[ti]){digReq[ti]=0;digWork[ti]=0;releaseDig(ti);}
+      }
+    }
+  }else{ // ---- 地表 ----
+    if(tool==="mark"){
+      if(markers.length>=CONFIG.MAX_MARKERS){toast("标记最多 "+CONFIG.MAX_MARKERS+" 个");return;}
+      if(!explored[sgi(tx,ty)]){toast("未探索区域无法放置标记（战争迷雾）");return;}
+      markers.push({x:tx+0.5,y:ty+0.5,layer:L_OVER,group:curGroup});toast(groups[curGroup].name+" 采集标记（地表）");
+    }else if(tool==="demolish"){
+      const mi=markers.findIndex(m=>m.layer===L_OVER&&dist2(m.x,m.y,tx+0.5,ty+0.5)<2);
+      if(mi>=0){markers.splice(mi,1);toast("标记已移除");}
+      else toast("地表仅可移除标记");
+    }else if(tool==="dig"||tool==="nursery"||tool==="egg"||tool==="eggs"||tool==="hole"){
+      toast("该指令仅地下可用（地表：标记/拆除）");
+    }
+  }
+}
+function popCount(){return ants.length+broods.length;}
+function switchView(){
+  view=view===L_UNDER?L_OVER:L_UNDER;
+  document.getElementById("btn-view").innerHTML=view===L_UNDER?"⇄<small>去地表</small>":"⇄<small>回地下</small>";
+}
+
+/* ---------------- 相机（双层独立）与输入 ---------------- */
+const camU={x:GW*CONFIG.TILE/2,y:GH*CONFIG.TILE/2,z:1.4};
+const camS={x:SGW*CONFIG.TILE/2,y:SGH*CONFIG.TILE/2,z:0.9};
+let dpr=1;
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  canvas.width=innerWidth*dpr;canvas.height=innerHeight*dpr;
+  canvas.style.width=innerWidth+"px";canvas.style.height=innerHeight+"px";
+}
+addEventListener("resize",resize);resize();
+addEventListener("gesturestart",e=>e.preventDefault()); // iOS Safari/微信内置浏览器捏合缩放兜底（v1.12 平板适配）
+function checkOrient(){const o=document.getElementById("orient");if(o)o.style.display=innerWidth<768?"flex":"none";} // 手机竖屏挡板（§2 设计合同）
+checkOrient();addEventListener("orientationchange",()=>setTimeout(checkOrient,120));
+function cam(){return view===L_UNDER?camU:camS;}
+function worldSize(){return view===L_UNDER?[GW*CONFIG.TILE,GH*CONFIG.TILE]:[SGW*CONFIG.TILE,SGH*CONFIG.TILE];}
+function screenToWorld(sx,sy){
+  const c=cam();
+  return {x:(sx-innerWidth/2)/c.z+c.x, y:(sy-innerHeight/2)/c.z+c.y};
+}
+const pointers=new Map();
+let pinchD=0, dragged=false;
+canvas.addEventListener("pointerdown",e=>{
+  if(!inGame)return;
+  try{canvas.setPointerCapture(e.pointerId);}catch(err){}
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  dragged=false;
+  if(pointers.size===2){
+    const p=[...pointers.values()];
+    pinchD=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+  }
+});
+canvas.addEventListener("pointermove",e=>{
+  if(!pointers.has(e.pointerId))return;
+  const prev=pointers.get(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const c=cam();
+  if(pointers.size===1){
+    const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
+    if(Math.abs(dx)+Math.abs(dy)>3)dragged=true;
+    if(tool==="pan"||dragged){
+      if(dragged||tool==="pan"){
+        c.x-=dx/c.z;c.y-=dy/c.z;clampCam();
+      }
+    }
+  }else if(pointers.size===2){
+    const p=[...pointers.values()];
+    const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    if(pinchD>0)zoomAt((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2,d/pinchD);
+    pinchD=d;dragged=true;
+  }
+});
+canvas.addEventListener("pointerup",e=>{
+  const was=pointers.size;
+  pointers.delete(e.pointerId);
+  if(pointers.size<2)pinchD=0;
+  if(was===1&&!dragged&&tool!=="pan"&&inGame){
+    const w=screenToWorld(e.clientX,e.clientY);
+    toolAt(w.x/CONFIG.TILE,w.y/CONFIG.TILE);
+  }
+});
+canvas.addEventListener("pointercancel",e=>{pointers.delete(e.pointerId);pinchD=0;});
+canvas.addEventListener("wheel",e=>{
+  e.preventDefault();
+  zoomAt(e.clientX,e.clientY,e.deltaY<0?1.15:1/1.15);
+},{passive:false});
+function zoomAt(sx,sy,k){
+  const w=screenToWorld(sx,sy);
+  const c=cam();c.z=clamp(c.z*k,0.4,5);
+  const w2=screenToWorld(sx,sy);
+  c.x+=w.x-w2.x;c.y+=w.y-w2.y;clampCam();
+}
+function clampCam(){
+  const [W,H]=worldSize();const c=cam();
+  c.x=clamp(c.x,0,W);c.y=clamp(c.y,0,H);
+}
+canvas.addEventListener("contextmenu",e=>{
+  e.preventDefault();
+  if(!inGame)return;
+  const w=screenToWorld(e.clientX,e.clientY);
+  if(view===L_UNDER){
+    const tx=w.x/CONFIG.TILE|0,ty=w.y/CONFIG.TILE|0,ti=gi(tx,ty);
+    if(digReq[ti]){digReq[ti]=0;digWork[ti]=0;releaseDig(ti);}
+  }
+});
+
+/* ---------------- UI 绑定 ---------------- */
+document.querySelectorAll("#toolbar .btn[data-tool]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#toolbar .btn[data-tool]").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");tool=b.dataset.tool;
+  });
+});
+document.querySelectorAll(".gsel").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".gsel").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");curGroup=+b.dataset.g;
+    document.getElementById("btn-rule").textContent="规则："+({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule];
+  });
+});
+document.getElementById("btn-rule").addEventListener("click",()=>{
+  const order=["forage","combat","both"];
+  groups[curGroup].rule=order[(order.indexOf(groups[curGroup].rule)+1)%3];
+  document.getElementById("btn-rule").textContent="规则："+({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule];
+  toast(groups[curGroup].name+" 规则 → "+({forage:"采集（遇袭反击）",combat:"战斗（驻守标记）",both:"兼顾"})[groups[curGroup].rule]);
+});
+/* ---------------- 列队面板（v1.15 原作式：看队内构成 + 拖拽调兵） ---------------- */
+const squadEl=document.getElementById("squad");
+const squadCols=[...squadEl.querySelectorAll(".scol")];
+const ghostEl=document.getElementById("dragGhost");
+let squadOpen=false,pickAnt=null,dragAnt=null,dragMoved=false,dragSX=0,dragSY=0;
+const ST_CN=()=>({idle:"闲逛",dig:"挖掘",forage:"找食",return:"回巢",goup:"上行"});
+function stCN(a){
+  if(a.tgtE&&a.tgtE.hp>0)return"⚔接敌";
+  if(a.carry>0)return"🍯搬运";
+  return ST_CN()[a.state]||a.state;
+}
+function moveAntTo(a,g){
+  if(a.group===g)return;
+  a.group=g; // rule 每帧从 groups[a.group] 实时下发（antStep），标记按新组生效
+  toast(`已调入 ${groups[g].name}：${CASTE_CN[a.caste]}`);
+}
+const SQ_CN={worker:"工",soldier:"兵",ranged:"远",tank:"坦"};
+function renderSquad(){
+  squadCols.forEach((col,g)=>{
+    col.style.setProperty("--gc",GRING[g]);
+    const mem=ants.filter(a=>a.group===g);
+    const w=mem.filter(a=>a.caste==="worker").length,r=mem.filter(a=>a.caste==="ranged").length,t=mem.filter(a=>a.caste==="tank").length;
+    col.querySelector("h4 em").textContent=`${mem.length} 只 · 工${w}/兵${mem.length-w-r-t}/远${r}/坦${t}`;
+    const list=col.querySelector(".slist");list.innerHTML="";
+    if(!mem.length){const e=document.createElement("div");e.className="empty";e.textContent="（空队）";list.appendChild(e);return;}
+    for(const a of mem){
+      const d=document.createElement("div");d.className="acard"+(pickAnt===a?" picked":"");
+      d.innerHTML=`<span class="ring">${SQ_CN[a.caste]}</span>`+
+        `<span class="hp"><i style="width:${Math.max(0,Math.min(100,a.hp/a.maxhp*100)).toFixed(0)}%"></i></span>`+
+        `<span class="st">${a.layer===L_OVER?"地表":"地下"}·${stCN(a)}</span>`;
+      bindCard(d,a);list.appendChild(d);
+    }
+  });
+}
+function openSquad(){squadOpen=true;pickAnt=null;squadEl.style.display="flex";renderSquad();}
+function closeSquad(){squadOpen=false;pickAnt=null;squadEl.style.display="none";}
+function colAt(x,y){
+  for(let g=0;g<3;g++){
+    const r=squadCols[g].getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)return g;
+  }
+  return null;
+}
+function showGhost(a,x,y){
+  ghostEl.style.display="flex";
+  ghostEl.style.left=(x+12)+"px";ghostEl.style.top=(y+10)+"px";
+  ghostEl.style.borderColor=GRING[a.group];
+  ghostEl.textContent=CASTE_CN[a.caste]+" → 拖到目标队";
+}
+function bindCard(el,a){
+  el.addEventListener("pointerdown",e=>{
+    e.preventDefault();e.stopPropagation();
+    dragAnt=a;dragMoved=false;dragSX=e.clientX;dragSY=e.clientY;
+    try{el.setPointerCapture(e.pointerId);}catch(err){}
+  });
+  el.addEventListener("pointermove",e=>{
+    if(dragAnt!==a)return;
+    if(!dragMoved&&Math.abs(e.clientX-dragSX)+Math.abs(e.clientY-dragSY)>6)dragMoved=true;
+    if(dragMoved){showGhost(a,e.clientX,e.clientY);
+      const g=colAt(e.clientX,e.clientY);
+      squadCols.forEach((c,i)=>c.classList.toggle("hover",i===g));}
+  });
+  el.addEventListener("pointerup",e=>{
+    if(dragAnt!==a)return;
+    e.stopPropagation();
+    hideGhost();
+    if(dragMoved){ // 拖拽落点
+      const g=colAt(e.clientX,e.clientY);
+      if(g!=null&&g!==a.group)moveAntTo(a,g);
+    }else{ // 点选：拿起/放下
+      pickAnt=(pickAnt===a)?null:a;
+    }
+    dragAnt=null;renderSquad();
+  });
+  el.addEventListener("pointercancel",()=>{if(dragAnt===a){hideGhost();dragAnt=null;renderSquad();}});
+}
+function hideGhost(){ghostEl.style.display="none";squadCols.forEach(c=>c.classList.remove("hover"));}
+squadCols.forEach((col,g)=>{
+  col.addEventListener("pointerup",e=>{ // 点选模式：点目标列空处放入
+    if(pickAnt&&!e.target.closest(".acard")&&pickAnt.group!==g){
+      moveAntTo(pickAnt,g);pickAnt=null;renderSquad();
+    }
+  });
+});
+squadEl.addEventListener("pointerdown",e=>{if(e.target===squadEl)closeSquad();}); // 点空白关闭
+document.getElementById("btn-squad").addEventListener("click",()=>{
+  if(!inGame)return;
+  squadOpen?closeSquad():openSquad();
+});
+document.getElementById("btn-squad-close").addEventListener("click",closeSquad);
+document.getElementById("btn-view").addEventListener("click",switchView);
+document.getElementById("btn-debug").addEventListener("click",()=>{devMode=!devMode;showPher=devMode;
+  document.getElementById("devhud").style.display=devMode?"block":"none";});
+document.getElementById("btn-stress").addEventListener("click",()=>{
+  if(!inGame)return;
+  let n=CONFIG.STRESS_TARGET-ants.length;
+  while(n-->0)addAnt(NEST.x+(rng()*6-3),NEST.y+(rng()*3-1.5),"worker",0,L_UNDER);
+  toast("压测：当前 "+ants.length+" 蚁（无视人口上限）");
+});
+document.querySelectorAll("[data-speed]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    speed=+b.dataset.speed;userPaused=speed===0;
+    if(!userPaused)prevSpeed=speed;
+    syncSpeedUI();
+  });
+});
+addEventListener("keydown",e=>{
+  if(e.code==="Tab"){e.preventDefault();if(inGame)switchView();}
+  if(e.code==="Space"){e.preventDefault();if(inGame)togglePause();}
+  if(e.key==="d"||e.key==="D"){devMode=!devMode;showPher=devMode;document.getElementById("devhud").style.display=devMode?"block":"none";}
+});
+function togglePause(){
+  userPaused=!userPaused;
+  if(userPaused&&speed>0)prevSpeed=speed;
+  speed=userPaused?0:(prevSpeed||1);
+  syncSpeedUI();
+}
+let prevSpeed=1;
+function syncSpeedUI(){document.querySelectorAll("[data-speed]").forEach(x=>x.classList.toggle("active",+x.dataset.speed===speed));}
+let hiddenPause=false,preHiddenSpeed=1;
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden&&!userPaused&&inGame){hiddenPause=true;preHiddenSpeed=speed||1;speed=0;}
+  else if(!document.hidden&&hiddenPause){hiddenPause=false;speed=userPaused?0:preHiddenSpeed;syncSpeedUI();}
+});
+
+/* ---------------- 升级面板（M3-3：王浆 + 分支二选一锁死） ---------------- */
+const jellyEl=document.getElementById("jellypanel");
+const JELLY_BRANCHES={
+  worker:[{id:"indust",cn:"勤劳型",fx:"载量 +"+CONFIG.WORKER_CARRY_UP+"，采集动作 -"+CONFIG.LOAD_FAST+"s"},
+          {id:"alert", cn:"警觉型",fx:"闪避 "+Math.round(CONFIG.EVADE*100)+"% 物理伤害"}],
+  soldier:[{id:"wall",cn:"坚壁型",fx:"受到物理伤害 -"+Math.round(CONFIG.SOLDIER_ARMOR*100)+"%"},
+           {id:"rage",cn:"狂战型",fx:"攻击 +"+Math.round(CONFIG.SOLDIER_RAGE*100)+"%"}],
+  ranged:[{id:"proj",cn:"投射型",fx:"射程 +"+CONFIG.RANGED_PROJ.range+"，伤害 +"+Math.round(CONFIG.RANGED_PROJ.dmg*100)+"%（3 级味道：一击重锤）"},
+          {id:"rapid",cn:"速攻型",fx:"攻速 +100%（CD 减半），伤害 -"+Math.round(-CONFIG.RANGED_RAPID.dmg*100)+"%"}],
+  tank:[{id:"taunt",cn:"嘲讽型",fx:CONFIG.TANK_TAUNT_R+" 格内敌人强制攻击你，转火回血 "+CONFIG.TANK_REGEN+"/s"},
+        {id:"stun",cn:"眩晕型",fx:"攻击 "+Math.round(CONFIG.TANK_STUN_CHANCE*100)+"% 概率眩晕目标 "+CONFIG.STUN_T+"s（打断进攻节奏）"}],
+};
+function renderJelly(){
+  document.getElementById("jelly-sub").textContent="王浆储备："+jelly+"（本局共获得 "+jellyEarned+"）";
+  const list=document.getElementById("jelly-list");list.innerHTML="";
+  for(const cs of ["worker","soldier","ranged","tank"]){
+    const row=document.createElement("div");
+    row.style.cssText="background:rgba(16,12,8,.6);border:1px solid rgba(232,217,184,.15);border-radius:10px;padding:9px";
+    const cost=CONFIG.JELLY_COST[cs];
+    let html=`<div style="font-size:13.5px;color:#ffb45e;font-weight:700;margin-bottom:6px">${CASTE_CN[cs]} <span style="opacity:.6;font-weight:400;font-size:11px">分支价 ${cost} 王浆</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">`;
+    for(const b of JELLY_BRANCHES[cs]){
+      const chosen=jellyUpgrades[cs]===b.id, locked=jellyUpgrades[cs]&&jellyUpgrades[cs]!==b.id;
+      html+=`<button class="btn" data-jc="${cs}" data-jb="${b.id}" ${chosen||locked||jelly<cost?"disabled":""} style="flex:1;min-width:180px;min-height:52px;text-align:left;${chosen?"border-color:#7fe07f;color:#a8f0b8;":locked?"opacity:.35;":""}">
+        <b style="font-size:13px">${b.cn}${chosen?" ✓已选":locked?"（已锁）":""}</b><br><small style="opacity:.75">${b.fx}</small></button>`;
+    }
+    row.innerHTML=html+"</div>";
+    list.appendChild(row);
+  }
+  list.querySelectorAll("button[data-jb]").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const cs=b.dataset.jc,bid=b.dataset.jb,cost=CONFIG.JELLY_COST[cs];
+      if(jellyUpgrades[cs]){toast("该兵种分支已锁死（二选一）");return;}
+      if(jelly<cost){toast("王浆不足（需 "+cost+"）");return;}
+      jelly-=cost;jellyUpgrades[cs]=bid;
+      // 升级立即生效：存量蚂蚁补满新属性（maxhp 提升类不回血，只改上限语义——当前分支均不改 HP）
+      for(const a of ants){a.maxhp=statOf(a,"maxhp");if(a.hp>a.maxhp)a.hp=a.maxhp;}
+      toast("🍯 "+CASTE_CN[cs]+" → "+JELLY_BRANCHES[cs].find(x=>x.id===bid).cn+"（另一分支已永久锁死）");
+      renderJelly();
+    });
+  });
+}
+function openJelly(){jellyEl.style.display="flex";renderJelly();}
+function closeJelly(){jellyEl.style.display="none";}
+document.getElementById("btn-jelly").addEventListener("click",()=>{
+  if(!inGame)return;
+  jellyEl.style.display==="flex"?closeJelly():openJelly();
+});
+document.getElementById("btn-jelly-close").addEventListener("click",closeJelly);
+jellyEl.addEventListener("pointerdown",e=>{if(e.target===jellyEl)closeJelly();});
+
+/* ---------------- 渲染 ---------------- */
+const bgU=document.createElement("canvas");bgU.width=GW*CONFIG.TILE;bgU.height=GH*CONFIG.TILE;
+const bgUC=bgU.getContext("2d");
+const bgS=document.createElement("canvas");bgS.width=SGW*CONFIG.TILE;bgS.height=SGH*CONFIG.TILE;
+const bgSC=bgS.getContext("2d");
+const phCanvasU=document.createElement("canvas");phCanvasU.width=GW;phCanvasU.height=GH;
+const phImgU=phCanvasU.getContext("2d").createImageData(GW,GH);
+const phCanvasS=document.createElement("canvas");phCanvasS.width=SGW;phCanvasS.height=SGH;
+const phImgS=phCanvasS.getContext("2d").createImageData(SGW,SGH);
+const fogCanvas=document.createElement("canvas");fogCanvas.width=SGW;fogCanvas.height=SGH;
+const fogCtx=fogCanvas.getContext("2d");
+const fogImg=fogCtx.createImageData(SGW,SGH);
+
+const STRATA=[[0,.28,"#9a6a3e","#7c4f2d"],[.28,.55,"#7c4f2d","#663f24"],[.55,.8,"#663f24","#523218"],[.8,1,"#523218","#3e2611"]];
+function strataColor(y){
+  const k=y/GH;
+  for(const [a,b,c1,c2] of STRATA){
+    if(k>=a&&k<=b){const t=(k-a)/(b-a);
+      const p=parseInt(c1.slice(1),16),q=parseInt(c2.slice(1),16);
+      return `rgb(${lerp(p>>16,q>>16,t)|0},${lerp(p>>8&255,q>>8&255,t)|0},${lerp(p&255,q&255,t)|0})`;}
+  }
+  return "#3e2611";
+}
+let rng2=mulberry32(999); // 烘焙专用（重烘焙不闪变）
+function bakeTileU(tx,ty){
+  const s=CONFIG.TILE,i=gi(tx,ty),t=tile[i];
+  const c=bgUC;
+  const grad=c.createLinearGradient(0,ty*s,0,(ty+1)*s);
+  grad.addColorStop(0,strataColor(ty));grad.addColorStop(1,strataColor(ty+1));
+  c.fillStyle=grad;c.fillRect(tx*s,ty*s,s,s);
+  if(t===T_SOIL||t===T_ROCK){
+    for(let k=0;k<7;k++){
+      c.fillStyle=rng2()>0.5?"rgba(0,0,0,.10)":"rgba(255,230,190,.05)";
+      c.fillRect(tx*s+rng2()*s,ty*s+rng2()*s,1.6,1.6);
+    }
+  }
+  if(t===T_ROCK){
+    c.fillStyle="rgba(20,20,22,.55)";c.fillRect(tx*s,ty*s,s,s);
+    c.fillStyle="rgba(120,120,126,.12)";c.fillRect(tx*s+2,ty*s+2,s-5,s-5);
+  }
+  if(t===T_AIR||t===T_SHAFT){
+    c.fillStyle="#1c1208";c.fillRect(tx*s,ty*s,s,s);
+    c.fillStyle="rgba(255,214,150,.10)";
+    const solid=(x,y)=>!isDug(x,y);
+    if(solid(tx,ty-1))c.fillRect(tx*s,ty*s,s,2);
+    if(solid(tx,ty+1))c.fillRect(tx*s,(ty+1)*s-2,s,2);
+    if(solid(tx-1,ty))c.fillRect(tx*s,ty*s,2,s);
+    if(solid(tx+1,ty))c.fillRect((tx+1)*s-2,ty*s,2,s);
+    if(t===T_SHAFT){ // 竖井侧壁高光
+      c.fillStyle="rgba(140,200,255,.14)";
+      c.fillRect(tx*s+1,ty*s,1.5,s);c.fillRect((tx+1)*s-2.5,ty*s,1.5,s);
+    }
+  }
+  if(tileFood[i]>0&&t===T_SOIL){
+    c.fillStyle="rgba(224,200,110,.25)";
+    c.beginPath();c.arc(tx*s+s/2,ty*s+s/2,s*0.3,0,7);c.fill();
+  }
+}
+function bakeAllU(){bgUC.clearRect(0,0,bgU.width,bgU.height);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)bakeTileU(x,y);dirtyMap=false;}
+function bakeTileS(tx,ty){
+  const s=CONFIG.TILE,i=sgi(tx,ty),c=bgSC;
+  const k=rng2();
+  c.fillStyle=k>0.5?"#3d5a2a":"#44622f"; // 草地双色
+  c.fillRect(tx*s,ty*s,s,s);
+  for(let j=0;j<3;j++){
+    c.fillStyle=rng2()>0.5?"rgba(0,0,0,.07)":"rgba(255,255,220,.04)";
+    c.fillRect(tx*s+rng2()*s,ty*s+rng2()*s,1.5,1.5);
+  }
+  if(sTile[i]===S_BLOCK){
+    c.fillStyle="#2a3d1e";c.fillRect(tx*s,ty*s,s,s);
+    c.fillStyle="rgba(90,140,60,.4)";
+    c.beginPath();c.arc(tx*s+s*0.4,ty*s+s*0.4,s*0.32,0,7);c.fill();
+    c.beginPath();c.arc(tx*s+s*0.65,ty*s+s*0.6,s*0.26,0,7);c.fill();
+  }
+}
+function bakeAllS(){bgSC.clearRect(0,0,bgS.width,bgS.height);
+  for(let y=0;y<SGH;y++)for(let x=0;x<SGW;x++)bakeTileS(x,y);dirtySur=false;}
+function drawFog(){ // 战争迷雾 ImageData（每 0.5s 由 update 刷新）
+  const d=fogImg.data;
+  for(let i=0;i<SGW*SGH;i++){
+    const o=i*4;
+    if(explored[i]){d[o+3]=0;}
+    else{d[o]=8;d[o+1]=6;d[o+2]=4;d[o+3]=235;}
+  }
+  fogCtx.putImageData(fogImg,0,0);
+}
+function drawPheromones(f,img,cv){
+  const d=img.data;
+  for(let i=0;i<f.w*f.h;i++){
+    const o=i*4;
+    const fd=f.food[i],hd=f.home[i];
+    if(fd<0.02&&hd<0.02){d[o+3]=0;continue;}
+    if(fd>=hd){d[o]=214;d[o+1]=224;d[o+2]=90;d[o+3]=Math.min(120,fd*70);}
+    else{d[o]=120;d[o+1]=175;d[o+2]=235;d[o+3]=Math.min(100,hd*55);}
+  }
+  cv.getContext("2d").putImageData(img,0,0);
+}
+const GRING=["#8a5410","#2f8a54","#3a6f9a"]; // 队色环（与标记色一致）：1队琥珀/2队绿/3队蓝
+function drawAntBody(c,a,bodyCol,bellyCol,ring){
+  c.save();c.translate(a.x*CONFIG.TILE,a.y*CONFIG.TILE);c.rotate(a.ang);
+  // M3 兵种体型/体色：兵蚁 1.35 / 坦克 1.7 宽厚 / 远程 1.1 苗条绿腹（蚁酸）
+  const big=a.caste==="esoldier"?1.35:a.caste==="soldier"?1.35:a.caste==="tank"?1.7:a.caste==="ranged"?1.1:1;
+  if(a.caste==="tank")bellyCol="#a34a16";
+  if(a.caste==="ranged")bellyCol="#7fae4a";
+  c.scale(big,big);
+  c.strokeStyle="#16100b";c.lineWidth=1.6;c.lineCap="round";
+  const ph=a.phase;
+  for(let pair=0;pair<3;pair++){
+    const lx=(pair-1)*3.2,sw=Math.sin(ph+pair*2.1)*2.6;
+    for(const side of[-1,1]){
+      const p=side>0?sw:-sw;
+      c.beginPath();c.moveTo(lx,side*2);
+      c.quadraticCurveTo(lx+p*.5,side*4.6,lx+p,side*6.2);c.stroke();
+    }
+  }
+  c.lineWidth=1;
+  for(const side of[-1,1]){c.beginPath();c.moveTo(5,-side*1.1);c.quadraticCurveTo(8,-side*2.8,9.6,-side*2.1);c.stroke();}
+  if(a.caste==="soldier"){ // 兵蚁大颚
+    c.strokeStyle="#0d0a07";c.lineWidth=1.4;
+    for(const side of[-1,1]){c.beginPath();c.moveTo(6,side*1.5);c.quadraticCurveTo(10,side*2.6,11.5,side*0.4);c.stroke();}
+  }
+  c.fillStyle=bellyCol;c.beginPath();c.ellipse(-4.6,0,4.4,3,0,0,7);c.fill();
+  if(ring){c.strokeStyle=ring;c.lineWidth=.9;
+    for(const off of[-1.4,1.1]){c.beginPath();c.ellipse(-4.6+off,0,1.7,2.8,0,-1.2,1.2);c.stroke();}}
+  c.fillStyle=bodyCol;c.beginPath();c.ellipse(0,0,2.8,2.1,0,0,7);c.fill();
+  c.beginPath();c.ellipse(4,0,2.3,1.8,0,0,7);c.fill();
+  if(a.carry>0){c.fillStyle="#e8d27a";c.beginPath();c.ellipse(6.8,-3.6,2.6,1.9,.4,0,7);c.fill();}
+  c.restore();
+  // 血条（受伤才显示）
+  if(a.maxhp&&a.hp<a.maxhp){
+    const w=16,p=clamp(a.hp/a.maxhp,0,1);
+    c.fillStyle="rgba(0,0,0,.5)";c.fillRect(a.x*CONFIG.TILE-w/2,a.y*CONFIG.TILE-11,w,2.5);
+    c.fillStyle=p>0.5?"#7fe07f":"#ff6a4e";c.fillRect(a.x*CONFIG.TILE-w/2,a.y*CONFIG.TILE-11,w*p,2.5);
+  }
+}
+function drawQueenBody(c,q,queenCol,bellyCol,scale){
+  c.save();c.translate(q.x*CONFIG.TILE,q.y*CONFIG.TILE);
+  c.scale(scale,scale); // 先缩放再画光晕——光晕随体量缩放
+  const glow=c.createRadialGradient(0,0,4,0,0,70);
+  glow.addColorStop(0,queenCol==="#e0952f"?"rgba(224,149,47,.14)":"rgba(220,60,40,.14)");
+  glow.addColorStop(1,"rgba(0,0,0,0)");
+  c.fillStyle=glow;c.fillRect(-70,-70,140,140);
+  c.rotate(-0.06+Math.sin(perf*0.02)*0.02);
+  c.strokeStyle="#16100b";c.lineWidth=2.4;c.lineCap="round";
+  const ph=perf*0.03;
+  for(let pair=0;pair<3;pair++){
+    const lx=(pair-1)*7,sw=Math.sin(ph+pair*2.1)*5;
+    for(const side of[-1,1]){const p=side>0?sw:-sw;
+      c.beginPath();c.moveTo(lx,side*4);c.quadraticCurveTo(lx+p*.5,side*10,lx+p,side*13);c.stroke();}
+  }
+  c.fillStyle=bellyCol;c.beginPath();c.ellipse(-11,0,12,8.4,0,0,7);c.fill();
+  c.strokeStyle="#8a5410";c.lineWidth=1.6;
+  for(const off of[-3.6,2.8]){c.beginPath();c.ellipse(-11+off,0,4.4,7.6,0,-1.2,1.2);c.stroke();}
+  c.fillStyle=queenCol;c.beginPath();c.ellipse(0,0,7,5.4,0,0,7);c.fill();
+  c.beginPath();c.ellipse(10,0,5.6,4.4,0,0,7);c.fill();
+  c.restore();
+  // 蚁后血条
+  if(q.maxhp&&q.hp<q.maxhp&&q.hp>0){
+    const w=26,p=clamp(q.hp/q.maxhp,0,1);
+    c.fillStyle="rgba(0,0,0,.55)";c.fillRect(q.x*CONFIG.TILE-w/2,q.y*CONFIG.TILE-16,w,3.5);
+    c.fillStyle="#ff6a4e";c.fillRect(q.x*CONFIG.TILE-w/2,q.y*CONFIG.TILE-16,w*p,3.5);
+  }
+}
+function drawPredator(c,p){
+  if(!p.alive)return;
+  c.save();c.translate(p.x*CONFIG.TILE,p.y*CONFIG.TILE);
+  const night=isNight();
+  c.fillStyle=night?"rgba(255,60,40,.10)":"rgba(255,60,40,.06)";
+  c.beginPath();c.arc(0,0,40,0,7);c.fill(); // 危险圈
+  c.rotate(p.ang);
+  if(p.kind==="spider"){
+    c.strokeStyle="#1a1410";c.lineWidth=2;c.lineCap="round";
+    const ph=p.phase||0;
+    for(let i=0;i<4;i++){
+      const aOff=(i-1.5)*0.55,sw=Math.sin(ph+i*1.7)*3;
+      for(const side of[-1,1]){
+        c.beginPath();c.moveTo(0,side*2);
+        c.quadraticCurveTo(Math.sin(aOff)*10+sw*0.3,side*8,Math.sin(aOff)*16,side*11);c.stroke();
+      }
+    }
+    c.fillStyle="#33261a";c.beginPath();c.ellipse(0,0,7,5.5,0,0,7);c.fill();
+    c.fillStyle="#4a3524";c.beginPath();c.ellipse(6,0,4,3.2,0,0,7);c.fill();
+  }else{
+    c.fillStyle="#2e2a22";c.beginPath();c.ellipse(0,0,9,6.5,0,0,7);c.fill();
+    c.fillStyle="#3d382c";c.beginPath();c.ellipse(7,0,5,4,0,0,7);c.fill();
+    c.strokeStyle="#1a1712";c.lineWidth=1.6;
+    for(let i=-1;i<=1;i++){c.beginPath();c.moveTo(i*4,-6);c.lineTo(i*4,-9);c.stroke();
+      c.beginPath();c.moveTo(i*4,6);c.lineTo(i*4,9);c.stroke();}
+  }
+  c.restore();
+  const w=22,pp=clamp(p.hp/p.maxhp,0,1);
+  c.fillStyle="rgba(0,0,0,.5)";c.fillRect(p.x*CONFIG.TILE-w/2,p.y*CONFIG.TILE-13,w,3);
+  c.fillStyle="#ff6a4e";c.fillRect(p.x*CONFIG.TILE-w/2,p.y*CONFIG.TILE-13,w*pp,3);
+}
+let perf=0;
+function drawTitan(c,p){ // M3-5 巨兽（美洲牛蛙型）：体型≈3.5 格，绿褐巨躯+巨口
+  c.save();c.translate(p.x*CONFIG.TILE,p.y*CONFIG.TILE);
+  c.fillStyle="rgba(120,60,10,.10)";c.beginPath();c.arc(0,0,CONFIG.TITAN_AOE_R*CONFIG.TILE,0,7);c.fill(); // 拍打范围圈
+  c.rotate(p.ang);
+  const eat=p.eatT>0;
+  if(eat){ // 吞食爆发窗：红光警示（×3 集火窗口）
+    c.fillStyle="rgba(255,60,40,.14)";c.beginPath();c.arc(0,0,60,0,7);c.fill();
+  }
+  if(p.aoeT>0){ // 拍打冲击环
+    const k=1-p.aoeT/0.4;
+    c.strokeStyle=`rgba(255,220,120,${(1-k)*0.8})`;c.lineWidth=3;
+    c.beginPath();c.arc(0,0,CONFIG.TITAN_AOE_R*CONFIG.TILE*(0.4+k*0.8),0,7);c.stroke();
+  }
+  const hop=Math.sin(p.phase)*2;
+  c.fillStyle="#4a5c28";c.beginPath();c.ellipse(0,hop,26,20,0,0,7);c.fill();
+  c.fillStyle="#5c7034";c.beginPath();c.ellipse(16,hop-2,12,9,0,0,7);c.fill();
+  c.fillStyle="#2a3318";c.beginPath();c.ellipse(24,hop-3,6,4,0,0,7);c.fill(); // 巨口
+  c.fillStyle="#e8d9b8";c.beginPath();c.arc(20,hop-6,1.8,0,7);c.fill(); // 眼
+  c.strokeStyle="#3a4620";c.lineWidth=3;
+  for(const side of[-1,1]){c.beginPath();c.moveTo(-8,side*16);c.quadraticCurveTo(-16,side*26,-24,side*24);c.stroke();}
+  c.restore();
+  const w=56,pp=clamp(p.hp/p.maxhp,0,1);
+  c.fillStyle="rgba(0,0,0,.55)";c.fillRect(p.x*CONFIG.TILE-w/2,p.y*CONFIG.TILE-34,w,5);
+  c.fillStyle=eat?"#ffd24e":"#ff6a4e";c.fillRect(p.x*CONFIG.TILE-w/2,p.y*CONFIG.TILE-34,w*pp,5);
+}
+function render(){
+  const c=canvas.getContext("2d");
+  c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle="#14100c";c.fillRect(0,0,innerWidth,innerHeight);
+  if(!inGame)return;
+  const under=view===L_UNDER;
+  const cm=cam();
+  c.translate(innerWidth/2,innerHeight/2);c.scale(cm.z,cm.z);c.translate(-cm.x,-cm.y);
+  if(under){renderUnder(c);}else{renderOver(c);}
+}
+function renderUnder(c){
+  if(dirtyMap)bakeAllU();
+  c.drawImage(bgU,0,0);
+  if(showPher){
+    drawPheromones(phU,phImgU,phCanvasU);
+    c.imageSmoothingEnabled=true;
+    c.globalAlpha=0.9;
+    c.drawImage(phCanvasU,0,0,GW*CONFIG.TILE,GH*CONFIG.TILE);
+    c.globalAlpha=1;
+  }
+  // 挖掘标记
+  for(let i=0;i<GW*GH;i++){
+    if(digReq[i]&&tile[i]===T_SOIL){
+      const x=i%GW,y=(i/GW)|0;
+      c.strokeStyle="rgba(255,180,94,.5)";c.lineWidth=1;
+      c.strokeRect(x*CONFIG.TILE+1,y*CONFIG.TILE+1,CONFIG.TILE-2,CONFIG.TILE-2);
+      if(digWork[i]>0){
+        const p=digWork[i]/CONFIG.DIG_WORK;
+        c.strokeStyle="rgba(255,220,150,.8)";
+        c.beginPath();c.moveTo(x*CONFIG.TILE+3,y*CONFIG.TILE+CONFIG.TILE-3);
+        c.lineTo(x*CONFIG.TILE+3+(CONFIG.TILE-6)*p,y*CONFIG.TILE+3);c.stroke();
+      }
+    }
+  }
+  // 地下食物堆（堆粒数随储量缩放——残量滴灌源一眼可辨"基本采空"）
+  for(let i=0;i<GW*GH;i++){
+    if(tileFood[i]>0&&isDug(i%GW,(i/GW)|0)&&tile[gi(i%GW,(i/GW)|0)]!==T_SHAFT){
+      const x=(i%GW+0.5)*CONFIG.TILE,y=((i/GW|0)+0.5)*CONFIG.TILE;
+      const r2=mulberry32(i+7);
+      const np=Math.max(2,Math.ceil(tileFood[i]/CONFIG.SRC_CAP*8));
+      for(let k=0;k<np;k++){
+        c.fillStyle=["#d8b45a","#c9a04a","#e0c46e"][k%3];
+        c.beginPath();c.ellipse(x+(r2()-.5)*9,y+(r2()-.5)*7,3,2.2,r2()*3,0,7);c.fill();
+      }
+    }
+  }
+  // 育婴格+幼体
+  for(const n of nurseries){
+    const x=(n.ti%GW)*CONFIG.TILE,y=((n.ti/GW)|0)*CONFIG.TILE;
+    c.strokeStyle="rgba(232,217,184,.4)";c.lineWidth=1;
+    c.strokeRect(x+2,y+2,CONFIG.TILE-4,CONFIG.TILE-4);
+  }
+  for(const b of broods){
+    const x=(b.ti%GW+0.5)*CONFIG.TILE,y=((b.ti/GW|0)+0.5)*CONFIG.TILE;
+    if(b.stage===0){c.fillStyle="#f2e8d5";c.beginPath();c.ellipse(x,y,3,2.2,0.3,0,7);c.fill();}
+    else if(b.stage===1){c.fillStyle="#e3cf9c";c.beginPath();c.ellipse(x,y,4.2,2.8,0.3,0,7);c.fill();}
+    else{c.fillStyle="#d9c49a";c.beginPath();c.ellipse(x,y,4,3,0.3,0,7);c.fill();
+      c.fillStyle="rgba(120,86,50,.5)";c.fillRect(x-3,y-0.8,6,1.6);}
+    if(b.caste==="soldier"){ // 兵蚁卵点红点
+      c.fillStyle="rgba(255,90,60,.8)";c.beginPath();c.arc(x+3,y-3,1.4,0,7);c.fill();
+    }else if(b.caste==="ranged"){ // 远程卵绿点
+      c.fillStyle="rgba(127,174,74,.9)";c.beginPath();c.arc(x+3,y-3,1.4,0,7);c.fill();
+    }else if(b.caste==="tank"){ // 坦克卵橙点
+      c.fillStyle="rgba(255,150,40,.9)";c.beginPath();c.arc(x+3,y-3,1.8,0,7);c.fill();
+    }
+  }
+  // 竖井入口箭头
+  for(const h of holes){
+    const x=h.ux*CONFIG.TILE+CONFIG.TILE/2;
+    c.fillStyle="rgba(140,200,255,.8)";
+    c.beginPath();c.moveTo(x,2.2*CONFIG.TILE);c.lineTo(x-5,2.2*CONFIG.TILE+8);c.lineTo(x+5,2.2*CONFIG.TILE+8);c.closePath();c.fill();
+    c.font="9px sans-serif";c.textAlign="center";c.fillText("地表",x,2.2*CONFIG.TILE-3);
+  }
+  // 尸体
+  for(const cp of corpses){if(cp.layer!==L_UNDER)continue;
+    c.save();c.translate(cp.x*CONFIG.TILE,cp.y*CONFIG.TILE);c.rotate(cp.ang);
+    c.globalAlpha=clamp(cp.timer/CONFIG.CORPSE_T,0,1)*0.8;
+    c.fillStyle="#5a4632";c.beginPath();c.ellipse(0,0,4,2.2,0,0,7);c.fill();
+    c.fillStyle="#3a2e20";c.beginPath();c.ellipse(4,0,2,1.6,0,0,7);c.fill();
+    c.globalAlpha=1;c.restore();
+  }
+  // 蚂蚁（地下）——蚁身色环=队伍
+  for(const a of ants){if(a.layer!==L_UNDER)continue;
+    drawAntBody(c,a,"#221812","#d98e2b",GRING[a.group]);}
+  // 敌蚁（地下来袭）
+  for(const e of enemies){if(e.layer!==L_UNDER)continue;
+    drawAntBody(c,e,"#1c1010","#8a2f1e","#c04a30");}
+  if(queen)drawQueenBody(c,queen,"#221812","#e0952f",0.7); // v1.12 战神反馈再缩：基础体 2.4 格 ×0.7 ≈ 1.7 格
+  // M3-1 蚁酸弹道（地下：防波来袭时远程蚁在洞内接战）
+  for(const p of projectiles){
+    c.fillStyle="rgba(150,200,70,.95)";
+    c.beginPath();c.arc(p.x*CONFIG.TILE,p.y*CONFIG.TILE,2.2,0,7);c.fill();
+  }
+  // 尘土
+  for(const p of dust){if(p.layer!==L_UNDER)continue;
+    c.fillStyle=`rgba(190,150,100,${Math.min(.6,p.life)})`;
+    c.fillRect(p.x*CONFIG.TILE,p.y*CONFIG.TILE,2,2);}
+  // 标记
+  for(const m of markers){if(m.layer!==L_UNDER)continue;drawMarker(c,m);}
+}
+function renderOver(c){
+  if(dirtySur)bakeAllS();
+  c.drawImage(bgS,0,0);
+  if(showPher){
+    drawPheromones(phS,phImgS,phCanvasS);
+    c.globalAlpha=0.75;
+    c.drawImage(phCanvasS,0,0,SGW*CONFIG.TILE,SGH*CONFIG.TILE);
+    c.globalAlpha=1;
+  }
+  // 洞口
+  for(const h of holes){
+    const x=(h.sx+0.5)*CONFIG.TILE,y=(h.sy+0.5)*CONFIG.TILE;
+    c.fillStyle="#0d0906";c.beginPath();c.ellipse(x,y,9,7,0,0,7);c.fill();
+    c.strokeStyle="rgba(140,200,255,.6)";c.lineWidth=2;c.stroke();
+  }
+  // 地表食物堆（已探索才渲染）
+  for(let i=0;i<SGW*SGH;i++){
+    if(sTileFood[i]>0&&explored[i]){
+      const x=(i%SGW+0.5)*CONFIG.TILE,y=((i/SGW|0)+0.5)*CONFIG.TILE;
+      const kind=sSources.find(s=>sgi(s.x,s.y)===i);
+      const cols=kind&&kind.kind==="honey"?["#e8a44a","#f2c06e","#ffd98a"]:kind&&kind.kind==="corpse"?["#b8926a","#a5825e","#c9a678"]:["#d8b45a","#c9a04a","#e0c46e"];
+      const r2=mulberry32(i+13);
+      const np=Math.max(2,Math.ceil(sTileFood[i]/(kind?kind.cap:120)*8));
+      for(let k=0;k<np;k++){
+        c.fillStyle=cols[k%3];
+        c.beginPath();c.ellipse(x+(r2()-.5)*10,y+(r2()-.5)*8,3.2,2.4,r2()*3,0,7);c.fill();
+      }
+    }
+  }
+  // 敌巢（红色土丘+蚁后）
+  if(enemyNest&&!enemyNest.dead&&explored[sgi(clamp(enemyNest.x,0,SGW-1),clamp(enemyNest.y,0,SGH-1))]){
+    const x=(enemyNest.x+0.5)*CONFIG.TILE,y=(enemyNest.y+0.5)*CONFIG.TILE;
+    c.fillStyle="#3a2418";c.beginPath();c.ellipse(x,y,26,20,0,0,7);c.fill();
+    c.fillStyle="#241710";c.beginPath();c.ellipse(x,y,12,9,0,0,7);c.fill();
+    drawQueenBody(c,{x:enemyNest.x+0.5,y:enemyNest.y+0.5,hp:enemyNest.hp,maxhp:enemyNest.maxhp},"#2a1410","#c04a30",0.7);
+  }
+  // 尸体
+  for(const cp of corpses){if(cp.layer!==L_OVER)continue;
+    c.save();c.translate(cp.x*CONFIG.TILE,cp.y*CONFIG.TILE);c.rotate(cp.ang);
+    c.globalAlpha=clamp(cp.timer/CONFIG.CORPSE_T,0,1)*0.8;
+    c.fillStyle="#5a4632";c.beginPath();c.ellipse(0,0,4,2.2,0,0,7);c.fill();
+    c.globalAlpha=1;c.restore();
+  }
+  // 天敌/敌蚁/我方蚁（地表）
+  for(const p of predators)drawPredator(c,p);
+  for(const e of enemies){if(e.layer!==L_OVER)continue;
+    drawAntBody(c,e,"#1c1010","#8a2f1e","#c04a30");}
+  for(const a of ants){if(a.layer!==L_OVER)continue;
+    drawAntBody(c,a,"#221812","#d98e2b",GRING[a.group]);}
+  for(const p of dust){if(p.layer!==L_OVER)continue;
+    c.fillStyle=`rgba(200,190,150,${Math.min(.6,p.life)})`;
+    c.fillRect(p.x*CONFIG.TILE,p.y*CONFIG.TILE,2,2);}
+  for(const m of markers){if(m.layer!==L_OVER)continue;drawMarker(c,m);}
+  // M3-1 蚁酸弹道 + M3-2 嘲讽光环（地表）
+  for(const p of projectiles){
+    c.fillStyle="rgba(150,200,70,.95)";
+    c.beginPath();c.arc(p.x*CONFIG.TILE,p.y*CONFIG.TILE,2.2,0,7);c.fill();
+    c.fillStyle="rgba(150,200,70,.35)";
+    c.beginPath();c.arc(p.x*CONFIG.TILE,p.y*CONFIG.TILE,4,0,7);c.fill();
+  }
+  if(titan&&titan.alive)drawTitan(c,titan);
+  if(jellyUpgrades.tank==="taunt")for(const a of ants){
+    if(a.caste!=="tank"||a.layer!==view)continue;
+    c.strokeStyle="rgba(255,120,60,.18)";c.lineWidth=2;
+    c.beginPath();c.arc(a.x*CONFIG.TILE,a.y*CONFIG.TILE,CONFIG.TANK_TAUNT_R*CONFIG.TILE,0,7);c.stroke();
+  }
+  // 战争迷雾
+  c.imageSmoothingEnabled=true;
+  c.drawImage(fogCanvas,0,0,SGW*CONFIG.TILE,SGH*CONFIG.TILE);
+  // 夜幕
+  if(isNight()){
+    c.fillStyle="rgba(10,14,40,.38)";
+    c.fillRect(0,0,SGW*CONFIG.TILE,SGH*CONFIG.TILE);
+    c.fillStyle="rgba(200,215,255,.9)";c.font="16px sans-serif";
+    c.fillText("🌙",SGW*CONFIG.TILE-40,30);
+  }else{
+    c.fillStyle="rgba(255,230,150,.9)";c.font="16px sans-serif";
+    c.fillText("☀",SGW*CONFIG.TILE-40,30);
+  }
+}
+function drawMarker(c,m){
+  const pulse=1+Math.sin(perf*0.005)*0.12;
+  const col=["rgba(255,180,94,.85)","rgba(120,220,140,.85)","rgba(120,180,255,.85)"][m.group];
+  c.strokeStyle=col;c.lineWidth=2;
+  c.beginPath();c.arc(m.x*CONFIG.TILE,m.y*CONFIG.TILE,13*pulse,0,7);c.stroke();
+  c.fillStyle=col;c.font="10px sans-serif";c.textAlign="center";
+  c.fillText("采"+(m.group+1),m.x*CONFIG.TILE,m.y*CONFIG.TILE+3.5);
+}
+
+/* ---------------- HUD ---------------- */
+const hud=document.getElementById("hud"),devhud=document.getElementById("devhud");
+let fps=0,fpsN=0,fpsT=0,nightSeen=false;
+function updateHUD(dt){
+  if(!inGame)return;
+  const R=activeR();
+  const cnt=[0,0,0];for(const a of ants)cnt[a.group]++;
+  const cyc=CONFIG.DAY_LEN+CONFIG.NIGHT_LEN,ph=dayT%cyc;
+  const dayIcon=isNight()?"🌙夜":"☀昼", remain=Math.ceil((isNight()?cyc-ph:CONFIG.DAY_LEN-ph));
+  hud.innerHTML=`${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stock)}</b> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
+    `收入 <b>${R.toFixed(2)}</b>/s ｜ 击杀 <b>${kills}</b> ｜ 各队 <b>${cnt[0]}</b>/<b>${cnt[1]}</b>/<b>${cnt[2]}</b><br>`+
+    `用时 <b>${(simTime/60|0)}:${String(simTime%60|0).padStart(2,"0")}</b> ｜ ${view===L_UNDER?"地下":"地表"} ｜ 当前 ${groups[curGroup].name}·${({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule]}`+
+    `${queenCd>0?` ｜ <span class="warn">产卵冷却 ${queenCd.toFixed(0)}s</span>`:""}`+
+    `${stock<=0.001?` ｜ <span class="warn">⚠ 断粮</span>`:""}${stock>=CONFIG.STOCK_CAP?` ｜ <span class="warn">满仓·该投资了</span>`:""}`+
+    `${titan&&titan.alive?` ｜ <span class="warn">🐸 巨兽在场${titan.eatT>0?"·进食窗口！":""}</span>`:""}`+
+    `${queen&&queen.hp<queen.maxhp*0.5?` ｜ <span class="warn">⚠ 蚁后受击 ${Math.ceil(queen.hp)}/${queen.maxhp}</span>`:""}`;
+  if(devMode){
+    devhud.innerHTML=`FPS ${fps}<br>实体 ${ants.length+enemies.length+broods.length}（蚁${ants.length}/敌${enemies.length}/卵幼${broods.length}）<br>`+
+      `敌群 ${enemies.length}/${Math.round(DIFF.cap*endlessScale)} 波#${waveNo} ${Math.ceil(waveTimer)}s 策略:${STRAT.label.split(" ")[0]}<br>`+
+      `王浆 ${jelly}（+${jellyEarned}） 分支 W:${jellyUpgrades.worker||"-"} S:${jellyUpgrades.soldier||"-"} R:${jellyUpgrades.ranged||"-"} T:${jellyUpgrades.tank||"-"}<br>`+
+      `尸体 ${corpses.length} ｜ 救援 ${rescues} ｜ 入口 ${holes.length}<br>视口 ${innerWidth}×${innerHeight}@${dpr.toFixed(1)}x`;
+  }
+}
+
+/* ---------------- 主循环 ---------------- */
+let hiveTick=0;
+function update(dt){
+  simTime+=dt;dayT+=dt;
+  if(phU)phUpdate(phU,dt);if(phS)phUpdate(phS,dt); // [自查修复 M3] 信息素扩散+衰减此前定义未调用——场只撒不散，与 M1-2「扩散+衰减」设计相悖
+  if(isNight())nightSeen=true;
+  queenCd=Math.max(0,queenCd-dt);
+  // 源再生=「残量滴灌」（2026-10-11 战神反馈「食物采不完」）：主储量 70% 一次性可采空，
+  // 枯竭线 30% 以下由供给率滴灌——源不死（稳态收入=R）但会被基本采空，恢复挖新源驱动力
+  for(const s of sources){
+    const i=gi(s.x,s.y), floor=CONFIG.SRC_CAP*CONFIG.SRC_FLOOR_K;
+    if(tileFood[i]<floor)tileFood[i]=Math.min(floor,tileFood[i]+s.r*dt);
+  }
+  for(const s of sSources){
+    const i=sgi(s.x,s.y);
+    if(s.kind==="honey"&&!isNight())continue;
+    const floor=s.cap*CONFIG.SRC_FLOOR_K;
+    if(sTileFood[i]<floor)sTileFood[i]=Math.min(floor,sTileFood[i]+s.r*dt);
+  }
+  starvingNow=stock<=0.0001; // 断粮=没钱生蛋（仅 HUD 警示；2026-10-11 起无流量扣费，不再减速）
+  // M3-3 王浆：存活每半个昼夜天 +1（v1.20 节奏改判：入夜/黎明各结算一次，首枚 4 分钟到账）
+  if(dayT-halfMark>=CONFIG.DAY_LEN){
+    halfMark+=CONFIG.DAY_LEN;
+    jelly+=CONFIG.JELLY_DAY;jellyEarned+=CONFIG.JELLY_DAY;
+    toast((isNight()?"🌙 入夜":"☀ 黎明")+"——王浆 +1（当前 "+jelly+"）");
+  }
+  if(titanTimer>0){ // M3-5 巨兽进场倒计时
+    titanTimer-=dt;
+    if(titanTimer<=0)spawnTitan();
+  }
+  if(titan)stepTitan(titan,dt);
+  // M3-1 蚁酸弹道：追踪目标，命中结算
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p=projectiles[i];p.life-=dt;
+    const t=p.tgt;
+    const dead=!t||(t.alive===false)||(t.hp!==undefined&&t.hp<=0);
+    if(dead||p.life<=0){projectiles.splice(i,1);continue;}
+    const d=dist2(p.x,p.y,t.x,t.y);
+    if(d<0.25){
+      if(t.kind==="titan")damageTitan(t,p.dmg);
+      else{
+        t.hp-=p.dmg;
+        if(t.lastHitT!==undefined)t.lastHitT=simTime;
+        if(t.hp<=0)onDeath(t,p.src||{});
+      }
+      projectiles.splice(i,1);continue;
+    }
+    const a=Math.atan2(t.y-p.y,t.x-p.x);
+    p.x+=Math.cos(a)*p.spd*dt;p.y+=Math.sin(a)*p.spd*dt;
+  }
+  for(const a of ants)antStep(a,dt);
+  for(let i=broods.length-1;i>=0;i--){
+    const b=broods[i];b.timer-=dt;
+    if(b.timer<=0){
+      if(b.stage===0){b.stage=1;b.timer=CONFIG.BROOD_LARVA;}
+      else if(b.stage===1){b.stage=2;b.timer=CONFIG.BROOD_PUPA;}
+      else{
+        const x=b.ti%GW,y=(b.ti/GW)|0;
+        broods.splice(i,1);
+        addAnt(x+0.5,y+0.5,b.caste,b.group,L_UNDER);
+        peakPop=Math.max(peakPop,ants.length);
+      }
+    }
+  }
+  for(const e of enemies)enemyStep(e,dt);
+  for(const p of predators)predStep(p,dt);
+  for(let i=corpses.length-1;i>=0;i--){corpses[i].timer-=dt;if(corpses[i].timer<=0)corpses.splice(i,1);}
+  for(let i=dust.length-1;i>=0;i--){const p=dust[i];
+    p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=3*dt;p.life-=dt;
+    if(p.life<=0)dust.splice(i,1);}
+  // 敌群经济+波次（1s tick）
+  hiveTick+=dt;
+  if(hiveTick>=1){hiveTick=0;enemyHiveTick(1);}
+  // 探雾（0.5s）
+  fogTimer+=dt;
+  if(fogTimer>=0.5){
+    fogTimer=0;
+    for(const a of ants)if(a.layer===L_OVER)reveal(a.x,a.y,CONFIG.FOG_R);
+    for(const h of holes)reveal(h.sx,h.sy,CONFIG.FOG_R);
+    drawFog();
+  }
+  if(sfxWave>0)sfxWave-=dt;
+}
+function reveal(cx,cy,r){
+  const x0=Math.max(0,(cx-r)|0),x1=Math.min(SGW-1,(cx+r)|0);
+  const y0=Math.max(0,(cy-r)|0),y1=Math.min(SGH-1,(cy+r)|0);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    if(dist2(cx,cy,x,y)<=r*r)explored[sgi(x,y)]=1;
+  }
+}
+let lastT=0,acc=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  const rdt=Math.min(0.1,(ts-lastT)/1000||0.016);
+  lastT=ts;perf=ts;
+  fpsN++;fpsT+=rdt;if(fpsT>=0.5){fps=Math.round(fpsN/fpsT);fpsN=0;fpsT=0;}
+  if(inGame&&speed>0){
+    acc+=rdt*speed;
+    let n=0;
+    while(acc>=CONFIG.STEP&&n<12){update(CONFIG.STEP);acc-=CONFIG.STEP;n++;}
+    if(n>=12)acc=0;
+    if(toastT>0){toastT-=rdt;if(toastT<=0)toastEl.style.display="none";}
+  }
+  render();
+  updateHUD(rdt);
+}
+requestAnimationFrame(loop);
+
+/* ---------------- 开局 / 结算 / 菜单 ---------------- */
+function initGame(seed,key){
+  CONFIG.SEED=seed;rng=mulberry32(seed);
+  diffKey=key;DIFF=CONFIG.DIFF[key];
+  // 重置全部状态
+  stock=CONFIG.START_FOOD;queenCd=0;collected=0;collectedS=0;dugCount=0;rescues=0;
+  starvingNow=false;dayT=0;kills=0;peakPop=CONFIG.START_WORKERS;waveNo=0;simTime=0;
+  waveTimer=DIFF.wave;fogTimer=0;hiveTick=0;nightSeen=false;endlessScale=1.0;sfxWave=0;
+  ants=[];broods=[];nurseries=[];markers=[];enemies=[];predators=[];corpses=[];dust=[];projectiles=[];
+  jelly=0;jellyEarned=0;halfMark=0;jellyUpgrades={worker:null,soldier:null,ranged:null,tank:null};
+  projFired=0;stunSeen=0;titanEatSeen=0;
+  titan=null;titanTimer=-1;titanAnnounced=false;
+  // M3-4 敌群策略：开局按种子 roll（可复现），toast+HUD 可辨识
+  const stratKeys=["economy","aggressive","balanced"];
+  stratKey=stratKeys[rng()*3|0];STRAT=CONFIG.STRATS[stratKey];
+  waveTimer=DIFF.wave*STRAT.firstWaveMul; // 侵略型首波提前
+  digClaims.clear();curGroup=0;
+  groups=[{name:"1队",rule:"forage"},{name:"2队",rule:"combat"},{name:"3队",rule:"both"}];
+  genUnder();
+  genSurface();
+  phU=makeField(GW,GH);phS=makeField(SGW,SGH);
+  // 我方初始
+  for(let i=0;i<CONFIG.START_WORKERS;i++)addAnt(NEST.x+(rng()*4-2),NEST.y+(rng()*2-1),"worker",0,L_UNDER);
+  let placed=0;
+  for(let x=-5;x<=5&&placed<CONFIG.START_NURSERY;x++){
+    const tx=NEST.x+x,ty=NEST.y+3;
+    if(isDug(tx,ty)&&!isShaft(tx,ty)){nurseries.push({ti:gi(tx,ty)});placed++;}
+  }
+  queen={x:NEST.x,y:NEST.y-1,phase:0,hp:CONFIG.QUEEN_HP,maxhp:CONFIG.QUEEN_HP}; // v1.19 我方蚁后独立血量（原 200 太脆）
+  // 敌群初始（按难度缩放）
+  const ew=Math.round(CONFIG.E_START.eworker*DIFF.scale),es=Math.round(CONFIG.E_START.esoldier*DIFF.scale);
+  for(let i=0;i<ew;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),"eworker");
+  for(let i=0;i<es;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),"esoldier");
+  // 天敌：蜘蛛守高价值点，甲虫游荡（数量随难度）
+  const guards=[...sSources].sort((a,b)=>b.cap-a.cap);
+  const nSp=Math.round(2*DIFF.pred),nBe=Math.round(2*DIFF.pred);
+  for(let i=0;i<nSp;i++){const g=guards[i%guards.length];addPred("spider",g.x+2,g.y+2);predators[predators.length-1].guard={x:g.x+2,y:g.y+2};}
+  for(let i=0;i<nBe;i++)addPred("beetle",40+rng()*40,40+rng()*40);
+  // UI 复位
+  document.querySelectorAll(".gsel").forEach(x=>x.classList.toggle("active",+x.dataset.g===0));
+  document.getElementById("btn-rule").textContent="规则：采集";
+  document.getElementById("btn-view").innerHTML="⇄<small>去地表</small>";
+  view=L_UNDER;inGame=true;
+  document.getElementById("menu").style.display="none";
+  document.getElementById("report").style.display="none";
+  toast("难度 "+({easy:"简单",normal:"普通",hard:"困难"})[key]+" ｜ 种子 "+seed);
+  setTimeout(()=>toast("敌群策略："+STRAT.label),2600);
+  setTimeout(()=>toast("🍯 王浆来源：昼夜交替各 +1 ｜ 猎杀天敌 +1 ｜ 灭巢 +3 ｜ 杀巨兽 +2（🍯升级面板消费）"),5200);
+}
+function endGame(win){
+  inGame=false;
+  if(win){jelly+=CONFIG.JELLY_NEST;jellyEarned+=CONFIG.JELLY_NEST;} // M3-3 灭巢里程碑王浆
+  const rp=document.getElementById("report");
+  document.getElementById("rp-title").textContent=win?"🎉 灭巢成功 · 里程碑":"💀 蚁后陨落";
+  document.getElementById("rp-sub").textContent=win?"敌群蚁后被击杀——王浆 +"+CONFIG.JELLY_NEST+"（升级面板随时可花）":"你的蚁巢就此终结";
+  document.getElementById("rp-stats").innerHTML=
+    `用时 <b>${(simTime/60|0)}:${String(simTime%60|0).padStart(2,"0")}</b> ｜ 峰值人口 <b>${peakPop}</b><br>`+
+    `击杀 <b>${kills}</b> ｜ 地下采集 <b>${Math.floor(collected)}</b> ｜ 地表采集 <b>${Math.floor(collectedS)}</b><br>`+
+    `击退进攻波 <b>${waveNo}</b> ｜ 挖掘 <b>${dugCount}</b> 格 ｜ 难度 <b>${({easy:"简单",normal:"普通",hard:"困难"})[diffKey]}</b><br>`+
+    `🍯 王浆累计 <b>${jellyEarned}</b>（当前储备 ${jelly}） ｜ 敌群策略 <b>${STRAT.label.split(" · ")[0]}</b>`;
+  document.getElementById("rp-continue").style.display=win?"block":"none";
+  rp.style.display="flex";
+}
+document.getElementById("btn-start").addEventListener("click",()=>{
+  const s=document.getElementById("inp-seed").value.trim();
+  const seed=s?(parseInt(s,10)||[...s].reduce((a,c)=>(a*31+c.charCodeAt(0))|0,7)):((Math.random()*1e9)|0);
+  initGame(seed,document.getElementById("sel-diff").value);
+});
+document.getElementById("btn-about").addEventListener("click",()=>{
+  const a=document.getElementById("about");
+  a.style.display=a.style.display==="block"?"none":"block";
+});
+document.getElementById("rp-continue").addEventListener("click",()=>{
+  // 无尽阶梯：敌群更强重生（§5 每波 +25%）
+  endlessScale*=CONFIG.ENDLESS_SCALE;
+  enemyNest.dead=false;enemyNest.hp=enemyNest.maxhp;enemyNest.food=30;
+  enemies=[];
+  const cap=Math.round(DIFF.cap*endlessScale);
+  const n=Math.round(cap*0.5);
+  for(let i=0;i<n;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),i%3===0?"esoldier":"eworker");
+  waveTimer=DIFF.wave*Math.pow(CONFIG.ENDLESS_WAVE_K,waveNo);
+  document.getElementById("report").style.display="none";
+  inGame=true;
+  toast("敌群卷土重来（规模 ×"+endlessScale.toFixed(2)+"）——扩张防线吧");
+});
+document.getElementById("rp-restart").addEventListener("click",()=>{
+  document.getElementById("report").style.display="none";
+  document.getElementById("menu").style.display="flex";
+});
+
+/* ---------------- 冒烟自测（?autotest=1）
+   真实 DOM 事件管线驱动；战斗/波次用调试注入点构造场景；
+   结果写入 window.__M2 与 #autotest-result -------------- */
+if(new URLSearchParams(location.search).has("autotest")){
+  const out={steps:[],pass:true};
+  window.__M2={
+    get state(){return{inGame,view,stock:Math.floor(stock),      workers:ants.filter(a=>a.caste==="worker").length,
+      soldiers:ants.filter(a=>a.caste==="soldier").length,
+      ranged:ants.filter(a=>a.caste==="ranged").length,
+      tanks:ants.filter(a=>a.caste==="tank").length,enemies:enemies.length,
+      broods:broods.length,dug:dugCount,collected:Math.floor(collected),collectedS:Math.floor(collectedS),
+      kills,holes:holes.length,nightSeen,waveNo,peakPop,simTime:Math.floor(simTime),
+      nest:{hp:Math.ceil(enemyNest?enemyNest.hp:0),dead:enemyNest?enemyNest.dead:true},
+      src0:sources[0],s0:sSources[0],      nestTile:nurseries.length?{x:nurseries[0].ti%GW,y:(nurseries[0].ti/GW)|0}:null,
+      exploredN:explored.reduce((a,b)=>a+b,0),endlessScale,
+      jelly,jellyEarned,jellyUpgrades:{...jellyUpgrades},strat:stratKey,projFired,stunSeen,titanEatSeen,
+      titanHp:titan?titan.hp:null,titanAlive:!!(titan&&titan.alive),sSourceN:sSources.length,
+      groupDist:[ants.filter(a=>a.group===0).length,ants.filter(a=>a.group===1).length,ants.filter(a=>a.group===2).length]}},
+    out,
+    advance(secs){
+      const n=Math.ceil(secs/0.05);
+      for(let i=0;i<n;i++)update(0.05);
+    },
+    spawnPred(kind,x,y){addPred(kind,x,y);const p=predators[predators.length-1];p.guard={x,y};return p;},
+    grant(n){stock+=n;},          // 调试：注入食物（经济本身已由 M1 soak 验证）
+    grantJelly(n){jelly+=n;},     // 调试：注入王浆（M3 升级系统测试）
+    spawnTitanDebug(){titanAnnounced=true;spawnTitan();return titan;},
+    killTitanDebug(){if(titan)damageTitan(titan,99999);},
+    resetDay(t){dayT=(t===undefined?100:t);halfMark=dayT;}, // 调试：拨时钟（同步重置存活计天基准）
+    triggerWave,
+    warpOver(a){a.layer=L_OVER;a.x=holes[0].sx+0.5;a.y=holes[0].sy+3;a.state="idle";a.timer=0;a.tgt=null;a.stuck=0;},
+    revealAll(){explored.fill(1);drawFog();},
+    genHash(){
+      let h=0;for(let i=0;i<tile.length;i++)h=(h*31+tile[i])|0;
+      for(let i=0;i<sTile.length;i++)h=(h*31+sTile[i])|0;
+      for(const s of sources)h=(h*31+s.x*97+s.y)|0;
+      for(const s of sSources)h=(h*31+s.x*97+s.y+s.cap)|0;
+      return h;
+    }
+  };
+  function el(q){return document.querySelector(q)}
+  function fireBtn(q){el(q).dispatchEvent(new MouseEvent("click",{bubbles:true}));}
+  function fireCanvas(wx,wy){ // 世界格坐标 → 当前视图屏幕坐标
+    const c=view===L_UNDER?camU:camS;
+    const sx=(wx*CONFIG.TILE-c.x)*c.z+innerWidth/2;
+    const sy=(wy*CONFIG.TILE-c.y)*c.z+innerHeight/2;
+    canvas.dispatchEvent(new PointerEvent("pointerdown",{pointerId:99,clientX:sx,clientY:sy,pointerType:"mouse",bubbles:true}));
+    canvas.dispatchEvent(new PointerEvent("pointerup",{pointerId:99,clientX:sx,clientY:sy,pointerType:"mouse",bubbles:true}));
+  }
+  function step(name,fn){try{const r=fn();out.steps.push(name+":ok");return r;}catch(e){out.pass=false;out.steps.push(name+":FAIL "+e.message);}}
+  function assert(name,cond){if(!cond){out.pass=false;out.steps.push(name+":ASSERT_FAIL");}else out.steps.push(name+":✓");}
+  const T=CONFIG.TILE;
+  setTimeout(()=>{
+    // 1. 主菜单开局（普通档+固定种子）
+    el("#inp-seed").value="42";
+    step("开局",()=>fireBtn("#btn-start"));
+    assert("进入对局",inGame===true);
+    assert("主竖井存在",holes.length===1);
+    const hashA=window.__M2.genHash(); // 开局即取（任何玩法变更地图前）
+    // 2. 地下：挖向全部浅源（3×0.30=R0 0.90）
+    const shallows=sources.filter(s=>s.kind==="shallow");
+    step("选挖掘工具",()=>fireBtn('[data-tool="dig"]'));
+    for(const src of shallows){
+      const digN=Math.max(Math.abs(src.x-NEST.x),Math.abs(src.y-NEST.y))||1;
+      for(let k=1;k<=digN;k++){
+        const x=Math.round(NEST.x+(src.x-NEST.x)*k/digN);
+        const y=Math.round(NEST.y+(src.y-NEST.y)*k/digN);
+        step("挖"+x+","+y,()=>fireCanvas(x,y));
+      }
+      step("标记源"+src.x+","+src.y,()=>{fireBtn('[data-tool="mark"]');fireCanvas(src.x,src.y);fireBtn('[data-tool="dig"]');});
+    }
+    step("推进180s",()=>window.__M2.advance(180));
+    const st1=window.__M2.state;
+    out.d1={collected:st1.collected,stock:st1.stock};
+    assert("地下采集入库",st1.collected>0);
+    // 3. 孵化链：工蚁卵 + 兵蚁卵×2（战斗断言需要 2 兵蚁围剿甲虫；食物用 grant 注入——经济本身已由 M1 soak 验证）
+    const nt=st1.nestTile;
+    step("选工蚁卵",()=>fireBtn('[data-tool="egg"]'));
+    step("放工蚁卵",()=>fireCanvas(nt.x,nt.y));
+    window.__M2.advance(35);
+    const st2=window.__M2.state;
+    out.d2={stock:st2.stock,workers:st2.workers};
+    assert("工蚁孵化",st2.workers>=6);
+    // 编组单独控制：调蚁（真实 UI：组选择器+调蚁工具+画布点按）
+    step("选 2 队",()=>fireBtn('[data-g="1"]'));
+    step("选调蚁工具",()=>fireBtn('[data-tool="transfer"]'));
+    step("执行调蚁",()=>fireCanvas(NEST.x,NEST.y));
+    assert("调蚁生效（2 队有兵）",window.__M2.state.groupDist[1]>=1);
+    step("切回 1 队",()=>fireBtn('[data-g="0"]'));
+    // 列队面板（v1.15）：真实 DOM PointerEvent——点选通道 + 拖拽通道
+    step("打开列队",()=>fireBtn("#btn-squad"));
+    assert("列队打开",document.getElementById("squad").style.display==="flex");
+    const b2sel=window.__M2.state.groupDist[1];
+    step("点选拿起 1 队蚂蚁",()=>{
+      const card=document.querySelector('.scol[data-sg="0"] .acard');
+      const r=card.getBoundingClientRect();
+      card.dispatchEvent(new PointerEvent("pointerdown",{pointerId:7,clientX:r.left+8,clientY:r.top+8,bubbles:true}));
+      card.dispatchEvent(new PointerEvent("pointerup",{pointerId:7,clientX:r.left+8,clientY:r.top+8,bubbles:true}));
+    });
+    step("点选放入 2 队",()=>{
+      const col=document.querySelector('.scol[data-sg="1"]');
+      const r=col.getBoundingClientRect();
+      col.dispatchEvent(new PointerEvent("pointerup",{pointerId:7,clientX:r.left+10,clientY:r.bottom-12,bubbles:true}));
+    });
+    assert("点选调兵生效（2 队 +1）",window.__M2.state.groupDist[1]===b2sel+1);
+    const b3sel=window.__M2.state.groupDist[2];
+    step("拖拽 1 队蚂蚁到 3 队",()=>{
+      const card=document.querySelector('.scol[data-sg="0"] .acard');
+      const r1=card.getBoundingClientRect();
+      const r2=document.querySelector('.scol[data-sg="2"]').getBoundingClientRect();
+      const cx=r1.left+8,cy=r1.top+8,tx=r2.left+r2.width/2,ty=r2.top+r2.height/2;
+      card.dispatchEvent(new PointerEvent("pointerdown",{pointerId:8,clientX:cx,clientY:cy,bubbles:true}));
+      card.dispatchEvent(new PointerEvent("pointermove",{pointerId:8,clientX:cx+24,clientY:cy+24,bubbles:true}));
+      card.dispatchEvent(new PointerEvent("pointermove",{pointerId:8,clientX:tx,clientY:ty,bubbles:true}));
+      card.dispatchEvent(new PointerEvent("pointerup",{pointerId:8,clientX:tx,clientY:ty,bubbles:true}));
+    });
+    assert("拖拽调兵生效（3 队 +1）",window.__M2.state.groupDist[2]===b3sel+1);
+    if(!new URLSearchParams(location.search).has("squadshot")){ // 截图调试：?squadshot=1 保持面板打开
+      step("关闭列队",()=>fireBtn("#btn-squad-close"));
+      assert("列队关闭",document.getElementById("squad").style.display==="none");
+    }
+    step("注资（测试脚手架）",()=>window.__M2.grant(120));
+    // 人口=育婴格数：先造 2 格才有兵蚁卵位（工蚁已占满 6 格）
+    step("选育婴格工具",()=>fireBtn('[data-tool="nursery"]'));
+    step("造育婴格A",()=>fireCanvas(NEST.x+4,NEST.y+2));
+    step("造育婴格B",()=>fireCanvas(NEST.x+3,NEST.y+3));
+    step("选兵蚁卵",()=>fireBtn('[data-tool="eggs"]'));
+    step("放兵蚁卵1",()=>fireCanvas(NEST.x+4,NEST.y+2));
+    step("放兵蚁卵2",()=>{queenCd=0;fireCanvas(NEST.x+3,NEST.y+3);});
+    window.__M2.advance(35);
+    const st3=window.__M2.state;
+    out.d3={stock:st3.stock,soldiers:st3.soldiers};
+    assert("兵蚁孵化×2",st3.soldiers>=2);
+    // 清场隔离：M3-4 策略随机（可能侵略型首波 198s 破家），经济断言与敌群解耦
+    step("清场隔离",()=>{enemies.length=0;enemyNest.hatchT=1e9;enemyNest.food=0;waveTimer=1e9;});
+    step("补员2工蚁2兵蚁",()=>{addAnt(NEST.x+1,NEST.y,"worker",0,L_UNDER);addAnt(NEST.x-1,NEST.y,"worker",0,L_UNDER);
+      addAnt(NEST.x+2,NEST.y,"soldier",0,L_UNDER);addAnt(NEST.x-2,NEST.y,"soldier",0,L_UNDER);});
+    // 4. 新入口
+    step("选入口工具",()=>fireBtn('[data-tool="hole"]'));
+    step("建新入口",()=>fireCanvas(NEST.x-4,NEST.y));
+    assert("入口×2",window.__M2.state.holes===2);
+    // 5. 地表：视图切换+探雾+采集（拨回白天，避免夜间收缩干扰）
+    step("切地表视图",()=>fireBtn("#btn-view"));
+    assert("视图=地表",view===L_OVER);
+    window.__M2.advance(5);
+    const exN0=window.__M2.state.exploredN;
+    assert("洞口已照开迷雾",exN0>0);
+    window.__M2.revealAll();
+    const sS=sSources[0];
+    step("选标记工具",()=>fireBtn('[data-tool="mark"]'));
+    step("放地表标记",()=>fireCanvas(sS.x,sS.y));
+    step("派遣劳动队上地表",()=>{ // 2 兵蚁（守卫）+2 工蚁（采集），只派 1 队（地表标记归 1 队）
+      let n=0;
+      for(const a of ants){
+        if(a.layer!==L_UNDER||a.group!==0)continue;
+        if(a.caste==="soldier"&&n<2){window.__M2.warpOver(a);n++;}
+        else if(a.caste==="worker"&&n<4){window.__M2.warpOver(a);n++;}
+      }
+    });
+    step("拨回白天",()=>window.__M2.resetDay(100));
+    step("推进120s地表采集",()=>window.__M2.advance(120));
+    const st4=window.__M2.state;
+    out.d4={collectedS:st4.collectedS,stock:st4.stock};
+    assert("地表采集进洞",st4.collectedS>0);
+    // 6. 战斗：组规则切「战斗」（走真实 UI 按钮）→ 甲虫袭扰 → 兵蚁围剿
+    step("规则切战斗",()=>fireBtn("#btn-rule"));
+    step("空降兵蚁围甲虫",()=>{let n=0;
+      for(const a of ants)if(a.caste==="soldier"&&n<2){a.layer=L_OVER;a.x=sS.x+3;a.y=sS.y+3;a.state="idle";a.timer=0;a.tgtE=null;n++;}});
+    const pred=window.__M2.spawnPred("beetle",sS.x+1,sS.y+1); // 源周 carveClear 保证可走
+    const jp=window.__M2.state.jelly;
+    step("推进25s围攻甲虫",()=>window.__M2.advance(25));
+    out.d5={kills:window.__M2.state.kills,predHp:pred.hp,predAlive:pred.alive};
+    assert("击杀数>0",window.__M2.state.kills>0);
+    assert("猎杀天敌王浆+1",window.__M2.state.jelly===jp+1);
+    // 7. 敌群进攻波（兵蚁回防洞口拦截）——先恢复敌群经济（小规模+蚁后满血，防灭局连锁）
+    step("恢复敌群",()=>{queen.hp=queen.maxhp;enemyNest.hatchT=0;enemyNest.food=150;waveTimer=DIFF.wave;
+      for(let i=0;i<2;i++)addEnemy(enemyNest.x,enemyNest.y,"esoldier");
+      for(let i=0;i<2;i++)addEnemy(enemyNest.x,enemyNest.y,"eworker");});
+    step("触发进攻波",()=>window.__M2.triggerWave());
+    step("兵蚁回防洞口",()=>{for(const a of ants)if(a.caste==="soldier"&&a.layer===L_OVER)window.__M2.warpOver(a);});
+    const enemiesBefore=window.__M2.state.enemies;
+    const antsBefore=window.__M2.state.workers+window.__M2.state.soldiers;
+    step("推进45s防空",()=>window.__M2.advance(45));
+    step("战中间整补",()=>{queen.hp=queen.maxhp;for(const a of ants)if(a.caste!=="worker")a.hp=a.maxhp;});
+    step("再推45s防空",()=>window.__M2.advance(45));
+    const st5=window.__M2.state;
+    out.d6={kills:st5.kills,enemies:st5.enemies,workers:st5.workers,soldiers:st5.soldiers,antsBefore};
+    assert("交战发生（击杀或战损或歼敌）",st5.kills>0||st5.workers+st5.soldiers<antsBefore||st5.enemies<enemiesBefore);
+    // 7.5 M3：四兵种孵化 + 王浆升级（二选一锁死）+ 远程弹道/坦克眩晕 + 巨兽战
+    assert("敌群策略已随机（可辨识）",["economy","aggressive","balanced"].includes(window.__M2.state.strat));
+    step("切回地下视图",()=>fireBtn("#btn-view"));
+    assert("视图=地下",view===L_UNDER);
+    step("注资M3",()=>window.__M2.grant(120));
+    step("选育婴格工具",()=>fireBtn('[data-tool="nursery"]'));
+    step("造育婴格C",()=>fireCanvas(NEST.x+2,NEST.y+2));
+    step("造育婴格D",()=>fireCanvas(NEST.x-2,NEST.y+2));
+    step("选远程卵",()=>fireBtn('[data-tool="eggr"]'));
+    step("放远程卵",()=>{queenCd=0;fireCanvas(NEST.x+4,NEST.y+2);});
+    step("选坦克卵",()=>fireBtn('[data-tool="eggt"]'));
+    step("放坦克卵",()=>{queenCd=0;fireCanvas(NEST.x+3,NEST.y+3);});
+    window.__M2.advance(35);
+    const st3b=window.__M2.state;
+    out.d7={ranged:st3b.ranged,tanks:st3b.tanks};
+    assert("远程/坦克孵化",st3b.ranged>=1&&st3b.tanks>=1);
+    step("注入王浆",()=>window.__M2.grantJelly(6));
+    const j0=window.__M2.state.jelly;
+    step("打开升级面板",()=>fireBtn("#btn-jelly"));
+    assert("升级面板打开",document.getElementById("jellypanel").style.display==="flex");
+    step("买远程·投射型",()=>{
+      document.querySelector('button[data-jc="ranged"][data-jb="proj"]').dispatchEvent(new MouseEvent("click",{bubbles:true}));
+    });
+    assert("投射分支生效且扣费2",window.__M2.state.jellyUpgrades.ranged==="proj"&&window.__M2.state.jelly===j0-2);
+    step("买远程·速攻型（应被锁死）",()=>{
+      document.querySelector('button[data-jc="ranged"][data-jb="rapid"]').dispatchEvent(new MouseEvent("click",{bubbles:true}));
+    });
+    assert("二选一锁死（另一支拒买）",window.__M2.state.jellyUpgrades.ranged==="proj"&&window.__M2.state.jelly===j0-2);
+    step("买坦克·眩晕型",()=>{
+      document.querySelector('button[data-jc="tank"][data-jb="stun"]').dispatchEvent(new MouseEvent("click",{bubbles:true}));
+    });
+    assert("眩晕分支生效（扣费3）",window.__M2.state.jellyUpgrades.tank==="stun"&&window.__M2.state.jelly===j0-5);
+    step("关闭升级面板",()=>fireBtn("#btn-jelly-close"));
+    // 远程弹道+坦克眩晕实战：空降虫尸源旁围剿甲虫（3 只接轮，保证坦克命中样本量）
+    step("空降远程与坦克",()=>{
+      for(const a of ants)if(a.caste==="ranged"||a.caste==="tank"){
+        a.layer=L_OVER;a.x=sS.x+2;a.y=sS.y+2;a.state="idle";a.timer=0;a.tgtE=null;a.stuck=0;
+      }
+      for(let i=0;i<3;i++)window.__M2.spawnPred("beetle",sS.x+1+i*0.5,sS.y+1);
+    });
+    step("推进30s检验弹道与眩晕",()=>window.__M2.advance(30));
+    const st3c=window.__M2.state;
+    out.d8={projFired:st3c.projFired,stunSeen:st3c.stunSeen,kills:st3c.kills};
+    assert("远程弹道发射",st3c.projFired>0);
+    assert("坦克眩晕触发",st3c.stunSeen>0);
+    // 巨兽战：吞食回血=爆发窗机制解（§9-C⑥ 禁血牛堆）
+    const titan0=step("召巨兽",()=>window.__M2.spawnTitanDebug());
+    step("空降3工蚁喂巨兽",()=>{for(let i=0;i<3;i++)addAnt(titan0.x+0.4+i*0.3,titan0.y+0.5,"worker",0,L_OVER);});
+    const sSourceBase=window.__M2.state.sSourceN;
+    const jt=window.__M2.state.jelly;
+    step("推进12s巨兽进食",()=>window.__M2.advance(12));
+    const st3d=window.__M2.state;
+    out.d9={titanEatSeen:st3d.titanEatSeen,titanHp:st3d.titanHp,titanAlive:st3d.titanAlive};
+    assert("巨兽吞食触发爆发窗",st3d.titanEatSeen>0);
+    assert("巨兽存活待击杀",st3d.titanAlive===true);
+    step("爆发窗集火击杀",()=>window.__M2.killTitanDebug());
+    const st3e=window.__M2.state;
+    out.d10={jelly:st3e.jelly,sSourceN:st3e.sSourceN};
+    assert("击杀巨兽王浆+2",st3e.jelly===jt+2&&st3e.titanAlive===false);
+    assert("巨兽残骸成为食物源",st3e.sSourceN===sSourceBase+1);
+    // 存活王浆：拨时钟归零再推满 1 昼夜天（清场：防 482s 内敌群杀蚁后干扰断言）
+    step("清场休整",()=>{enemies.length=0;enemyNest.hatchT=1e9;enemyNest.food=0;waveTimer=1e9;queen.hp=queen.maxhp;queenCd=0;titanTimer=-1;});
+    step("拨时钟归零",()=>window.__M2.resetDay(0));
+    step("推进一个昼夜天",()=>window.__M2.advance(482));
+    assert("昼夜交替王浆×2（每半天1枚）",window.__M2.state.jellyEarned>=2);
+    // 8. 昼夜
+    assert("经历过夜晚",window.__M2.state.nightSeen===true);
+    // 9. 灭巢→战报→继续沙盒
+    step("击杀敌后",()=>{enemyNest.hp=0;onDeath(enemyNest,ants[0]||{});});
+    assert("战报弹出",el("#report").style.display!=="none");
+    step("继续沙盒",()=>fireBtn("#rp-continue"));
+    const st6=window.__M2.state;
+    assert("敌群重生且强化",st6.nest.dead===false&&st6.enemies>0&&st6.endlessScale>1.0);
+    // 10. 种子复现
+    initGame(42,"normal");
+    const hashB=window.__M2.genHash();
+    assert("同种子地图逐格一致",hashA===hashB);
+    if(new URLSearchParams(location.search).get("view")==="over")switchView(); // 截图调试：地表视图
+    // 汇总
+    out.final=window.__M2.state;
+    const div=document.createElement("div");div.id="autotest-result";
+    div.textContent="AUTOTEST "+(out.pass?"PASS":"FAIL")+" "+JSON.stringify(out);
+    div.style.cssText="position:fixed;top:100px;left:10px;color:#0f0;font-size:11px;z-index:99;max-width:90vw;word-break:break-all";
+    document.body.appendChild(div);
+    console.log("AUTOTEST",(out.pass?"PASS":"FAIL"),JSON.stringify(out));
+  },600);
+}
+</script>
+</body>
+</html>
