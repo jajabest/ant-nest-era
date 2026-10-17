@@ -139,7 +139,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.28（收入提速）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.29（挖掘进度入档）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -2286,6 +2286,12 @@ document.getElementById("rp-restart").addEventListener("click",()=>{
 /* ---------------- 存档（M4-2 核心提前落地 v1.23）：单槽自动存 20s + 继续按钮 + 隐私模式提示 ----------------
    地图/源/岩由种子重生成，不存 tile；只存动态状态。版本字段防坏档；隐私模式静默降级+菜单提示。 */
 const SAVE_KEY="antnest_save_v1";
+// v1.29 RLE 行程压缩：地图数组大部分是常量（土/0），编码 [值,长度,...] 对——6144 项压到 ~1KB
+function rleEnc(arr){const o=[];let cur=arr[0],n=1;
+  for(let i=1;i<arr.length;i++){if(arr[i]===cur&&n<65535)n++;else{o.push(cur,n);cur=arr[i];n=1;}}
+  o.push(cur,n);return o;}
+function rleDec(data,len){const o=new Float64Array(len);let p=0;
+  for(let i=0;i<data.length;i+=2){o.fill(data[i],p,p+data[i+1]);p+=data[i+1];}return o;}
 let saveBlocked=false;
 function saveGame(){
   if(!inGame)return;
@@ -2300,6 +2306,10 @@ function saveGame(){
       holes:holes.map(h=>({ux:h.ux,uy:h.uy,sx:h.sx,sy:h.sy})),
       enemies:enemies.map(e=>({c:e.caste,x:+e.x.toFixed(2),y:+e.y.toFixed(2),l:e.layer,s:e.state,hp:e.hp})),
       nest:{hp:Math.ceil(enemyNest.hp),food:Math.floor(enemyNest.food),dead:enemyNest.dead},
+      // v1.29 战神反馈「继续蚁巢后上次挖掉的没有了」：挖掘图/源储量/探索迷雾一并入档（RLE 压缩）
+      map:rleEnc(tile),foodU:rleEnc(Array.from(tileFood,v=>Math.round(v))),
+      exp:rleEnc(explored.map(e=>e?1:0)),foodS:rleEnc(Array.from(sTileFood,v=>Math.round(v))),
+      dugCount,collected:Math.floor(collected),collectedS:Math.floor(collectedS),rescues,
       titan:titan?{hp:Math.ceil(titan.hp),x:+titan.x.toFixed(2),y:+titan.y.toFixed(2),lifeT:Math.ceil(titan.lifeT)}:null,
       titanAnnounced,titanTimer:Math.ceil(titanTimer)}));
   }catch(e){if(!saveBlocked){saveBlocked=true;toast("⚠ 当前浏览器无法存档（隐私模式）——刷新将丢失进度");}}
@@ -2333,6 +2343,10 @@ function continueGame(){
   titanAnnounced=!!d.titanAnnounced;titanTimer=d.titanTimer||-1;titan=null;
   if(d.titan){titan={kind:"titan",x:d.titan.x,y:d.titan.y,ang:0,phase:0,cd:0,atk:CONFIG.TITAN_ATK,hp:d.titan.hp,maxhp:CONFIG.TITAN_HP,eatT:0,alive:true,lifeT:d.titan.lifeT,layer:L_OVER,aoeT:0};}
   projectiles.length=0;corpses.length=0;dust.length=0;digClaims.clear();
+  // v1.29 恢复挖掘图/源储量/迷雾/统计——挖掉的隧道读档原样回来
+  if(d.map){tile.set(rleDec(d.map,tile.length));tileFood.set(rleDec(d.foodU,tileFood.length));dirtyMap=true;}
+  if(d.exp){explored.set(rleDec(d.exp,explored.length));sTileFood.set(rleDec(d.foodS,sTileFood.length));dirtySur=true;}
+  if(d.dugCount!==undefined){dugCount=d.dugCount;collected=d.collected;collectedS=d.collectedS;rescues=d.rescues;}
   document.querySelectorAll(".gsel").forEach(x=>x.classList.toggle("active",+x.dataset.g===curGroup));
   document.getElementById("btn-rule").textContent="规则："+({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule];
   toast("已继续上次蚁巢（用时 "+(simTime/60|0)+" 分钟）");
