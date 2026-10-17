@@ -139,7 +139,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.25（王浆采集+兵种等级成长）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.28（收入提速）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -193,7 +193,7 @@ const CONFIG = {
   // 蚂蚁
   ANT_SPEED: 2,                 // §5 移速 2 格/s
   CARRY: 5,                     // §5 单趟载量 5
-  LOAD_TIME: 2,                 // §5 采集动作 2s
+  LOAD_TIME: 1.5,               // §5 采集动作 2s→1.5s（v1.28 收入提速配套）
   DIG_WORK: 9,                  // §5 挖掘速率 9 工蚁秒/格
   SHAFT_CLIMB: 6,               // [PH] 竖井爬行速度 格/s（v1.13 战神反馈「去洞口的隧道太长」再上调：3 时主竖井 21~27 格单程 8.5s 拖通勤；6≈平地 3 倍，单程 ~4s；敌群下爬同速）
   // 经济
@@ -206,7 +206,7 @@ const CONFIG = {
   U: 0,                         // §5 维持消耗：2026-10-11 战神裁决移除（「只有生蛋的时候再扣」）——sink 只剩建造/孵化，通胀护栏注记见 §5；保留行位防误回填
   STOCK_CAP: 200,               // [PH] §3 边界：库存满则采集暂停（M1 终审落地）
   // STARVE_SLOW 已随维持消耗一并移除（2026-10-11 战神裁决）——断粮仅 HUD 警示（没钱生蛋）
-  SRC_CAP: 50, SRC_R_SHALLOW: 0.30, SRC_R_DEEP: 0.45,
+  SRC_CAP: 50, SRC_R_SHALLOW: 0.45, SRC_R_DEEP: 0.68, // v1.28 战神反馈「获得食物速度慢」：稳态收入 +50%（0.90→1.35/s 理论值）——王浆/兵籍替补 60% 费等新 sink 加入后食物经济需更多流入；LOAD_TIME 2→1.5 同步提搬运节奏
   SRC_FLOOR_K: 0.3,             // [PH] 源残量线 30%（2026-10-11 战神反馈「食物采不完」：主储量 70% 可采空，枯竭线以下由供给率滴灌——稳态收入=R 不变，储量红利变一次性）
   // 地表源（[PH] M2 新增：地表供给高于地下，风险换收益）
   S_SEED_R: 0.6,   S_SEED_CAP: 120,    // 种子：低风险低收益
@@ -507,6 +507,7 @@ function phSense(f,arr,x,y,ang,passable){
 
 /* ---------------- 全局状态（initGame 重置） ---------------- */
 let stock=0, queenCd=0, collected=0, collectedS=0, dugCount=0, rescues=0;
+let stockShown=0; // v1.28 食物显示层：每帧 +1 追赶真值（入库从 +5 跳变改为一个点一个点累加）
 let starvingNow=false, dayT=0, kills=0, peakPop=0, waveNo=0, simTime=0;
 let waveTimer=0, fogTimer=0;
 let ants=[], broods=[], nurseries=[], markers=[], enemies=[], predators=[], corpses=[];
@@ -2049,7 +2050,7 @@ function updateHUD(dt){
   const cnt=[0,0,0];for(const a of ants)cnt[a.group]++;
   const cyc=CONFIG.DAY_LEN+CONFIG.NIGHT_LEN,ph=dayT%cyc;
   const dayIcon=isNight()?"🌙夜":"☀昼", remain=Math.ceil((isNight()?cyc-ph:CONFIG.DAY_LEN-ph));
-  hud.innerHTML=`${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stock)}</b> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
+  hud.innerHTML=`${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
     `收入 <b>${R.toFixed(2)}</b>/s ｜ 击杀 <b>${kills}</b> ｜ 各队 <b>${cnt[0]}</b>/<b>${cnt[1]}</b>/<b>${cnt[2]}</b><br>`+
     `用时 <b>${(simTime/60|0)}:${String(simTime%60|0).padStart(2,"0")}</b> ｜ ${view===L_UNDER?"地下":"地表"} ｜ 当前 ${groups[curGroup].name}·${({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule]}`+
     `${queenCd>0?` ｜ <span class="warn">产卵冷却 ${queenCd.toFixed(0)}s</span>`:""}`+
@@ -2084,6 +2085,9 @@ function update(dt){
     if(sTileFood[i]<floor)sTileFood[i]=Math.min(floor,sTileFood[i]+s.r*dt);
   }
   starvingNow=stock<=0.0001; // 断粮=没钱生蛋（仅 HUD 警示；2026-10-11 起无流量扣费，不再减速）
+  // v1.28 显示层追赶：每帧 +1 向真值靠拢（60/s），数字连续爬升不跳变；断粮/满仓等判定用真值 stock
+  if(stockShown>stock)stockShown=stock;
+  else if(stockShown<stock)stockShown=Math.min(stock,stockShown+1);
   // M3-3 王浆：存活每半个昼夜天 +1（v1.20 节奏改判：入夜/黎明各结算一次，首枚 4 分钟到账）
   if(dayT-halfMark>=CONFIG.DAY_LEN){
     halfMark+=CONFIG.DAY_LEN;
@@ -2190,7 +2194,7 @@ function initGame(seed,key){
   CONFIG.SEED=seed;rng=mulberry32(seed);
   diffKey=key;DIFF=CONFIG.DIFF[key];
   // 重置全部状态
-  stock=CONFIG.START_FOOD;queenCd=0;collected=0;collectedS=0;dugCount=0;rescues=0;
+  stock=CONFIG.START_FOOD;stockShown=CONFIG.START_FOOD;queenCd=0;collected=0;collectedS=0;dugCount=0;rescues=0;
   starvingNow=false;dayT=0;kills=0;peakPop=CONFIG.START_WORKERS;waveNo=0;simTime=0;
   waveTimer=DIFF.wave;fogTimer=0;hiveTick=0;nightSeen=false;endlessScale=1.0;sfxWave=0;
   ants=[];broods=[];nurseries=[];markers=[];enemies=[];predators=[];corpses=[];dust=[];projectiles=[];
