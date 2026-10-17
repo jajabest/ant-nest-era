@@ -63,6 +63,8 @@
   #toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(90,40,16,.92);color:#ffd9a0;
     padding:8px 18px;border-radius:10px;font-size:14px;font-weight:600;z-index:20;display:none;pointer-events:none;border:1px solid rgba(255,138,94,.4)}
   #hint{position:fixed;bottom:178px;left:50%;transform:translateX(-50%);color:rgba(232,217,184,.55);font-size:12px;z-index:9;pointer-events:none;text-align:center}
+  #blocker{position:fixed;inset:0;background:#14100c;color:#e8d9b8;display:none;align-items:center;justify-content:center;
+    flex-direction:column;gap:12px;z-index:200;text-align:center;padding:24px;font-size:16px;line-height:1.8}
   /* 主菜单 / 战报 overlay */
   .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 30%,#2a1c0e,#0d0906 75%);z-index:50;
     display:flex;align-items:center;justify-content:center;color:#e8d9b8}
@@ -113,7 +115,10 @@
   <button class="btn active" data-speed="1">1×</button>
   <button class="btn" data-speed="2">2×</button>
   <button class="btn" data-speed="4">4×</button>
+  <span style="width:1.5px;background:rgba(232,217,184,.22);align-self:stretch;margin:4px 2px"></span>
+  <button class="btn" id="btn-mute" style="min-width:44px">🔊</button>
 </div>
+<div id="blocker"><div>🐜 蚁巢纪元<br><small style="opacity:.7">手机屏幕太小，请用<b style="color:#ffb45e">平板</b>或<b style="color:#ffb45e">电脑</b>访问<br>（平板建议横屏）</small></div></div>
 <div id="squad">
   <div class="spanel">
     <div class="shead"><b>列队</b><span>拖动蚂蚁到目标队 ｜ 或：点一下拿起 → 点目标队空处放入</span>
@@ -139,7 +144,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.29（挖掘进度入档）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.30 · M4 全量交付（音效/引导/战绩/挡板）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -148,6 +153,7 @@
     </select>
     <label>地图种子（留空随机；同种子同地图，可分享）</label>
     <input id="inp-seed" placeholder="例如 42">
+    <div class="sub2" id="meta-line"></div>
     <button class="big" id="btn-start">开始新蚁巢</button>
     <button class="ghost" id="btn-continue" style="display:none">▶ 继续上次蚁巢</button>
     <button class="ghost" id="btn-about">操作说明 / 关于</button>
@@ -695,7 +701,7 @@ function tryAttack(att,tgt,dt){
 function damageAnt(a,dmg){
   if(a.caste==="worker"&&jellyUpgrades.worker==="alert"&&rng()<evadeRate())return; // 闪避：伤害归零
   if(a.caste==="soldier"&&jellyUpgrades.soldier==="wall")dmg*=1-armorRate();
-  a.hp-=dmg;a.lastHitT=simTime;
+  a.hp-=dmg;a.lastHitT=simTime;sfx("clash");
 }
 // 死亡结算
 function onDeath(u,killer){
@@ -719,6 +725,7 @@ function onDeath(u,killer){
   if(i>=0){
     if(u.state==="dig")releaseDig(u.tgt); // 防 claim 泄漏
     ants.splice(i,1);pushCorpse(u.x,u.y,u.layer);
+    sfx("die");
     // v1.24 兵籍替补：绑定蚁阵亡 → 其格自动扣 60% 费走 15s 快速替补（钱不够挂起，补款自动开孵）
     if(u.homeTi!==undefined){
       const nn=nurseries.find(n=>n.ti===u.homeTi);
@@ -760,6 +767,7 @@ function enemyHiveTick(dt){
   }
 }
 function triggerWave(){
+  sfx("alarm");
   const force=enemies.filter(e=>e.caste==="esoldier"||(e.caste==="eworker"&&rng()<0.5));
   for(const e of force)e.state="attack";
   if(force.length>0)toast("⚠ 敌群进攻！"+force.length+" 只敌蚁来袭");
@@ -772,6 +780,7 @@ function scheduleTitan(){
   toast("📢 远处传来低鸣……巨兽正在逼近（"+CONFIG.TITAN_DELAY+"s 后抵达地表）");
 }
 function spawnTitan(){
+  sfx("roar");
   // 从离敌巢最近的地图边缘进场；玩家蚁群聚集地=主洞口方向
   const home=holes[0];
   const edge={x:clamp(home.sx+(home.sx<SGW/2?-12:12),2,SGW-3),y:clamp(home.sy+(home.sy<SGH/2?-12:12),2,SGH-3)};
@@ -1030,7 +1039,7 @@ function antStepUnder(a,dt){
     phDeposit(f,f.food,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
     if(dist2(a.x,a.y,NEST.x,NEST.y)<2.2){
       if(a.carryJelly){jelly+=a.carry;jellyEarned+=a.carry;} // v1.25 王浆入账（不占食物仓）
-      else stock=Math.min(CONFIG.STOCK_CAP,stock+a.carry);
+      else stock=Math.min(CONFIG.STOCK_CAP,stock+a.carry);sfx("food");
       if(a.carryFrom!==L_OVER)collected+=a.carry; // 地表产量已计入 collectedS，不双计
       a.carry=0;a.carryJelly=false;a.state="forage";a.timer=0;
       if(!markers.some(m=>m.layer===L_UNDER)||stock>=CONFIG.STOCK_CAP)a.state="idle";
@@ -1094,7 +1103,7 @@ function antStepOver(a,dt){
     if(bd<1.4){
       a.layer=L_UNDER;a.x=h.ux+0.5;a.y=h.uy+0.5;a.stuck=0;
       if(a.carryJelly){jelly+=a.carry;jellyEarned+=a.carry;a.carry=0;} // v1.25 王浆进洞即入账（不占食物仓，不进地下二次结算）
-      else collectedS+=a.carry; // 地表产量进洞即计
+      else collectedS+=a.carry;sfx("food"); // 地表产量进洞即计
       a.carryJelly=false;
       a.state=a.carry>0?"return":"idle";a.timer=0; // 有粮继续回蚁后室入库（不丢粮）
     }
@@ -1186,7 +1195,7 @@ function claimDig(a){
 }
 function releaseDig(ti){if(digClaims.get(ti)){digClaims.delete(ti);}}
 function digTile(ti){
-  tile[ti]=T_AIR;digReq[ti]=0;digWork[ti]=0;dirtyMap=true;dugCount++;
+  tile[ti]=T_AIR;digReq[ti]=0;digWork[ti]=0;dirtyMap=true;dugCount++;sfx("dig");
 }
 function findFoodNearU(cx,cy,r){
   let best=-1,bd=r*r;
@@ -1245,7 +1254,7 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     const ti=gi(tx,ty);
     if(tool==="mark"){
       if(markers.length>=CONFIG.MAX_MARKERS){toast("标记最多 "+CONFIG.MAX_MARKERS+" 个");return;}
-      markers.push({x:tx+0.5,y:ty+0.5,layer:L_UNDER,group:curGroup});toast(groups[curGroup].name+" 采集标记（地下）");
+      markers.push({x:tx+0.5,y:ty+0.5,layer:L_UNDER,group:curGroup});sfx("mark");toast(groups[curGroup].name+" 采集标记（地下）");
     }else if(tool==="dig"){
       if(tile[ti]===T_SOIL)digReq[ti]=1;
       else if(tile[ti]===T_ROCK)toast("基岩无法挖掘");
@@ -1305,7 +1314,7 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     if(tool==="mark"){
       if(markers.length>=CONFIG.MAX_MARKERS){toast("标记最多 "+CONFIG.MAX_MARKERS+" 个");return;}
       if(!explored[sgi(tx,ty)]){toast("未探索区域无法放置标记（战争迷雾）");return;}
-      markers.push({x:tx+0.5,y:ty+0.5,layer:L_OVER,group:curGroup});toast(groups[curGroup].name+" 采集标记（地表）");
+      markers.push({x:tx+0.5,y:ty+0.5,layer:L_OVER,group:curGroup});sfx("mark");toast(groups[curGroup].name+" 采集标记（地表）");
     }else if(tool==="demolish"){
       const mi=markers.findIndex(m=>m.layer===L_OVER&&dist2(m.x,m.y,tx+0.5,ty+0.5)<2);
       if(mi>=0){markers.splice(mi,1);toast("标记已移除");}
@@ -1518,6 +1527,7 @@ document.getElementById("btn-squad").addEventListener("click",()=>{
 document.getElementById("btn-squad-close").addEventListener("click",closeSquad);
 document.getElementById("btn-view").addEventListener("click",switchView);
 // v1.27 调试按钮（🔧🐝）移除——devMode 保留 D 键入口（开发者用），玩家 UI 不再露出
+document.getElementById("btn-mute").addEventListener("click",function(){sfxMuted=!sfxMuted;this.textContent=sfxMuted?"🔇":"🔊";toast(sfxMuted?"音效已关":"音效已开");});
 document.querySelectorAll("[data-speed]").forEach(b=>{
   b.addEventListener("click",()=>{
     speed=+b.dataset.speed;userPaused=speed===0;
@@ -1543,6 +1553,46 @@ document.addEventListener("visibilitychange",()=>{
   if(document.hidden&&!userPaused&&inGame){hiddenPause=true;preHiddenSpeed=speed||1;speed=0;}
   else if(!document.hidden&&hiddenPause){hiddenPause=false;speed=userPaused?0:preHiddenSpeed;syncSpeedUI();}
 });
+
+/* ---------------- M4-3 音效（WebAudio 程序化合成：零素材零依赖；首次触摸激活；可静音） ---------------- */
+let AC=null,sfxMuted=false;
+function ac(){
+  if(sfxMuted)return null;
+  if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}}
+  if(AC.state==="suspended")AC.resume();
+  return AC;
+}
+document.addEventListener("pointerdown",()=>ac(),{once:true});
+function tone(f0,dur,type,vol,f1){
+  const a=ac();if(!a)return;
+  try{
+    const o=a.createOscillator(),g=a.createGain();
+    o.type=type||"sine";o.frequency.setValueAtTime(f0,a.currentTime);
+    if(f1)o.frequency.exponentialRampToValueAtTime(Math.max(1,f1),a.currentTime+dur);
+    g.gain.setValueAtTime(vol||0.06,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
+    o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+dur);
+  }catch(e){}
+}
+let sfxT={};
+function sfx(name){
+  if(sfxMuted)return;
+  const now=performance.now();
+  if(sfxT[name]&&now-sfxT[name]<400)return;
+  sfxT[name]=now;
+  switch(name){
+    case "mark": tone(660,0.06,"sine",0.05);break;
+    case "dig":  tone(180,0.05,"square",0.03);break;
+    case "food": tone(880,0.03,"sine",0.02);break;
+    case "clash":tone(140,0.07,"sawtooth",0.04,90);break;
+    case "hatch":tone(440,0.09,"sine",0.05,720);break;
+    case "die":  tone(220,0.1,"sawtooth",0.03,120);break;
+    case "alarm":tone(330,0.12,"square",0.06);setTimeout(()=>tone(262,0.14,"square",0.06),150);break;
+    case "roar": tone(90,0.45,"sawtooth",0.09,55);break;
+    case "win":  [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.14,"triangle",0.07),i*130));break;
+    case "lose": [392,330,262,196].forEach((f,i)=>setTimeout(()=>tone(f,0.16,"triangle",0.06),i*150));break;
+  }
+}
 
 /* ---------------- 升级面板（M3-3：王浆 + 分支二选一锁死） ---------------- */
 const jellyEl=document.getElementById("jellypanel");
@@ -2088,6 +2138,7 @@ function update(dt){
   // v1.28 显示层追赶：每帧 +1 向真值靠拢（60/s），数字连续爬升不跳变；断粮/满仓等判定用真值 stock
   if(stockShown>stock)stockShown=stock;
   else if(stockShown<stock)stockShown=Math.min(stock,stockShown+1);
+  tutTick(dt); // M4-5 新手引导步进
   // M3-3 王浆：存活每半个昼夜天 +1（v1.20 节奏改判：入夜/黎明各结算一次，首枚 4 分钟到账）
   if(dayT-halfMark>=CONFIG.DAY_LEN){
     halfMark+=CONFIG.DAY_LEN;
@@ -2132,6 +2183,7 @@ function update(dt){
         const na=ants[ants.length-1];
         na.homeTi=b.ti; // v1.24 兵籍绑定：此蚁属此格
         const nn=nurseries.find(n=>n.ti===b.ti);if(nn)nn.bound=b.caste;
+        sfx("hatch");
         peakPop=Math.max(peakPop,ants.length);
       }
     }
@@ -2243,6 +2295,8 @@ function endGame(win){
   inGame=false;
   if(win){jelly+=CONFIG.JELLY_NEST;jellyEarned+=CONFIG.JELLY_NEST;} // M3-3 灭巢里程碑王浆
   else clearSave(); // 蚁后陨落=终局清档（灭巢继续沙盒不清，快照自动续写）
+  meta.games++;if(win)meta.wins++;meta.bestMin=Math.max(meta.bestMin,simTime/60|0);metaSave(); // M4-2 跨局战绩
+  sfx(win?"win":"lose");
   const rp=document.getElementById("report");
   document.getElementById("rp-title").textContent=win?"🎉 灭巢成功 · 里程碑":"💀 蚁后陨落";
   document.getElementById("rp-sub").textContent=win?"敌群蚁后被击杀——王浆 +"+CONFIG.JELLY_NEST+"（升级面板随时可花）":"你的蚁巢就此终结";
@@ -2358,6 +2412,37 @@ try{if(localStorage.getItem(SAVE_KEY))document.getElementById("btn-continue").st
   const ab=document.getElementById("about");
   ab.innerHTML+='<br>⚠ 隐私模式下无法存档，刷新将丢失进度。';}
 document.getElementById("btn-continue").addEventListener("click",continueGame);
+
+/* ---------------- M4-2 跨局 meta（战绩独立存储）+ M4-5 新手引导 ---------------- */
+const META_KEY="antnest_meta_v1";
+let meta={games:0,wins:0,bestMin:0,tut:0};
+try{Object.assign(meta,JSON.parse(localStorage.getItem(META_KEY)||"{}"));}catch(e){}
+function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(meta));}catch(e){}}
+function metaLine(){
+  const el=document.getElementById("meta-line");if(!el)return;
+  el.textContent=meta.games?("战绩：已开 "+meta.games+" 巢 ｜ 灭巢 "+meta.wins+" 次 ｜ 最长存活 "+meta.bestMin+" 分钟"):"首巢待启——祝武运昌隆";
+}
+const TUT=[
+  {t:"① 挖掘：选 ⛏️ 工具，朝黄色源连点挖一条通道",done:()=>dugCount>=3},
+  {t:"② 采集：选 🧭 工具点在源上——本组工蚁会自动去采",done:()=>markers.some(m=>m.layer===0)},
+  {t:"③ 孵化：选 🥚 工具点育婴格，食物变蚂蚁",done:()=>broods.length>0||collected>=15},
+  {t:"④ 地表：点 ⇄ 去地表——远源更肥，但白天小心蜘蛛",done:()=>view===L_OVER||simTime>240},
+  {t:"⑤ 防御：进攻波来了兵蚁会回防洞口；把队规则切到「战斗」更稳",done:()=>waveNo>=1||simTime>330},
+];
+let tut=meta.tut?TUT.length:0,tutT=0;
+function tutTick(dt){
+  if(tut>=TUT.length)return;
+  tutT-=dt;if(tutT>0)return;tutT=0.6;
+  if(TUT[tut].done()){tut++;meta.tut=1;metaSave();tutT=1.5;
+    if(tut>=TUT.length)toast("🎓 引导完成——祝武运昌隆！");return;}
+  if(inGame)document.getElementById("hint").textContent="🎓 "+TUT[Math.min(tut,TUT.length-1)].t;
+}
+setInterval(metaLine,2000);metaLine(); // M4-2 菜单战绩行（meta 声明后首调，防 TDZ）
+function checkOrient(){ // M4-1：手机竖屏明确不做（<768px 挡板写死防范围蔓延）
+  const b=document.getElementById("blocker");
+  b.style.display=innerWidth<768?"flex":"none";
+}
+addEventListener("resize",checkOrient);checkOrient();
 
 /* ---------------- 冒烟自测（?autotest=1）
    真实 DOM 事件管线驱动；战斗/波次用调试注入点构造场景；
