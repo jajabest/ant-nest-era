@@ -118,6 +118,14 @@
   <span style="width:1.5px;background:rgba(232,217,184,.22);align-self:stretch;margin:4px 2px"></span>
   <button class="btn" id="btn-mute" style="min-width:44px">🔊</button>
 </div>
+<div id="campaign" class="overlay" style="display:none">
+  <div class="panel" style="max-width:560px">
+    <h1 style="font-size:20px">战役 · 前两章</h1>
+    <div class="sub2">按原作前两章的教学节奏改编，场景与叙事原创</div>
+    <div id="campaign-list"></div>
+    <button class="ghost" id="btn-campaign-back">返回</button>
+  </div>
+</div>
 <div id="blocker"><div>🐜 蚁巢纪元<br><small style="opacity:.7">手机屏幕太小，请用<b style="color:#ffb45e">平板</b>或<b style="color:#ffb45e">电脑</b>访问<br>（平板建议横屏）</small></div></div>
 <div id="squad">
   <div class="spanel">
@@ -144,7 +152,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.32（流场寻路）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.0（战役上线）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -154,7 +162,8 @@
     <label>地图种子（留空随机；同种子同地图，可分享）</label>
     <input id="inp-seed" placeholder="例如 42">
     <div class="sub2" id="meta-line"></div>
-    <button class="big" id="btn-start">开始新蚁巢</button>
+    <button class="big" id="btn-campaign">📖 战役 · 前两章</button>
+    <button class="big" id="btn-start">自由局 · 无尽沙盒</button>
     <button class="ghost" id="btn-continue" style="display:none">▶ 继续上次蚁巢</button>
     <button class="ghost" id="btn-about">操作说明 / 关于</button>
     <div class="about" id="about">
@@ -277,6 +286,9 @@ const CONFIG = {
   ENDLESS_SCALE: 1.25,          // §5 无尽阶梯：每波敌群 +25%
   ENDLESS_WAVE_K: 0.85,         // [PH] 继续沙盒后波间隔缩短系数
   // M3-5 巨兽（美洲牛蛙型 Titan）[PH]：禁血牛堆——机制解=进食爆发窗（§9-C⑥ 调研修正）
+  MOLE_HP: 400, MOLE_ATK: 8, MOLE_CD: 1.2, MOLE_SPEED: 0.5, MOLE_DIG: 2, // [PH] 鼹蟋蟀（第一章终局）：厚血+反挖土逼近
+  ERAIDER_HP: 60, ERAIDER_ATK: 4, ERAIDER_CD: 1.2, ERAIDER_SPEED: 1.6, // [PH] 掠蚁（第二章偷卵者）：脆、快、不恋战
+  ERAIDER_GUARD_HP: 200, ERAIDER_GUARD_ATK: 8, ERAIDER_GUARD_CD: 1.4, ERAIDER_GUARD_SPEED: 1.2, // [PH] 掠蚁兵（肉盾拖住）
   TITAN_WAVE_MIN: 2,            // 首次入场条件：击退波数 ≥2（v1.20 战神反馈「得不到王浆」：原 ≥3 普通档 ~16 分钟，王浆第二来源太晚；提前到第 2 波 ~11 分钟）
   // v1.25 战神反馈「和原作一样升级」：王浆=可采集资源 + 兵种 1→2→3 级成长线（原作对齐）
   S_JELLY_N: 2,                 // 地表王浆节点数 [PH]
@@ -527,10 +539,14 @@ let curGroup=0;
 let diffKey="normal", DIFF=CONFIG.DIFF.normal, endlessScale=1.0;
 const digClaims=new Map();
 let dust=[];
-const isNight=()=> (dayT%(CONFIG.DAY_LEN+CONFIG.NIGHT_LEN))>=CONFIG.DAY_LEN;
+const isNight=()=> (LEVEL&&LEVEL.caps&&LEVEL.caps.daynight===false)?false:((dayT%(CONFIG.DAY_LEN+CONFIG.NIGHT_LEN))>=CONFIG.DAY_LEN); // M5 第一章无昼夜
 // M3 兵种属性表（CONFIG 镜像；升级 buff 全部走 statOf()——「升级立即对全体生效」= 基因层面语义）
 const CASTE_STATS={
-  worker: {hp:CONFIG.WORKER_HP,  atk:CONFIG.WORKER_ATK,  cd:CONFIG.WORKER_CD,  spd:1,    cost:CONFIG.EGG_COST,     range:CONFIG.ATK_RANGE},
+  worker:{hp:20,atk:2,cd:1,spd:1,cost:10,food:1},soldier:{hp:40,atk:10,cd:0.8,spd:1.1,cost:25,food:0},
+  ranged:{hp:48,atk:14,cd:1.4,spd:0.9,cost:30,food:0,range:3.2},
+  tank:{hp:200,atk:6,cd:1,spd:0.55,cost:40,food:0},
+  eraider:{hp:60,atk:4,cd:1.2,spd:1.6,cost:0,food:0,steal:true},
+  eraiderGuard:{hp:200,atk:8,cd:1.4,spd:1.2,cost:0,food:0,block:true},worker: {hp:CONFIG.WORKER_HP,  atk:CONFIG.WORKER_ATK,  cd:CONFIG.WORKER_CD,  spd:1,    cost:CONFIG.EGG_COST,     range:CONFIG.ATK_RANGE},
   soldier:{hp:CONFIG.SOLDIER_HP, atk:CONFIG.SOLDIER_ATK, cd:CONFIG.SOLDIER_CD, spd:CONFIG.SOLDIER_SPD, cost:CONFIG.SOLDIER_COST, range:CONFIG.ATK_RANGE},
   ranged: {hp:CONFIG.RANGED_HP,  atk:CONFIG.RANGED_ATK,  cd:CONFIG.RANGED_CD,  spd:CONFIG.RANGED_SPD,  cost:CONFIG.RANGED_COST,  range:CONFIG.RANGED_RANGE},
   tank:   {hp:CONFIG.TANK_HP,    atk:CONFIG.TANK_ATK,    cd:CONFIG.TANK_CD,    spd:CONFIG.TANK_SPD,    cost:CONFIG.TANK_COST,    range:CONFIG.ATK_RANGE},
@@ -572,11 +588,15 @@ function addAnt(x,y,caste,group,layer){
     atkCd:0,tgtE:null,lastHitT:-99});
 }
 function addEnemy(x,y,caste,layer){
-  const sol=caste==="esoldier";
-  enemies.push({x,y,ang:rng()*6.283,state:sol?"patrol":"forage",layer:layer||L_OVER,
+  const sol=caste==="esoldier", er=caste==="eraider", erg=caste==="eraiderGuard";
+  enemies.push({x,y,ang:rng()*6.283,state:(sol||erg)?"patrol":"forage",layer:layer||L_OVER,
     caste,carry:0,tgt:null,stuck:0,timer:0,phase:rng()*6.283,stunT:0,
-    hp:sol?CONFIG.ESOLDIER_HP:CONFIG.EWORKER_HP,atk:sol?CONFIG.ESOLDIER_ATK:CONFIG.EWORKER_ATK,
-    atkCd:0,cd:sol?CONFIG.ESOLDIER_CD:CONFIG.EWORKER_CD});
+    hp:er?CONFIG.ERAIDER_HP:erg?CONFIG.ERAIDER_GUARD_HP:sol?CONFIG.ESOLDIER_HP:CONFIG.EWORKER_HP,
+    maxhp:er?CONFIG.ERAIDER_HP:erg?CONFIG.ERAIDER_GUARD_HP:sol?CONFIG.ESOLDIER_HP:CONFIG.EWORKER_HP,
+    atk:er?CONFIG.ERAIDER_ATK:erg?CONFIG.ERAIDER_GUARD_ATK:sol?CONFIG.ESOLDIER_ATK:CONFIG.EWORKER_ATK,
+    atkCd:0,cd:er?CONFIG.ERAIDER_CD:erg?CONFIG.ERAIDER_GUARD_CD:sol?CONFIG.ESOLDIER_CD:CONFIG.EWORKER_CD,
+    raid:false,egg:null,phase2:"seek"});
+  return enemies[enemies.length-1]; // M5：掠蚁生成需要拿到实体引用（此前无返回值→undefined 崩）
 }
 // M3-2 嘲讽吸火：嘲讽型坦克在光环半径内时敌人强制攻击它（原作嘲讽语义：转火+坦克自回血）
 function pickTaunt(list,x,y){
@@ -587,17 +607,85 @@ function pickTaunt(list,x,y){
   return t;
 }
 function addPred(kind,x,y){
-  const sp=kind==="spider";
-  predators.push({kind,x,y,ang:0,alive:true,respawnT:0,cd:0,wt:0,stunT:0,
-    hp:sp?CONFIG.SPIDER_HP:CONFIG.BEETLE_HP,maxhp:sp?CONFIG.SPIDER_HP:CONFIG.BEETLE_HP,
-    atk:sp?CONFIG.SPIDER_ATK:CONFIG.BEETLE_ATK,cdMax:sp?CONFIG.SPIDER_CD:CONFIG.BEETLE_CD,
-    speed:sp?CONFIG.SPIDER_SPEED:CONFIG.BEETLE_SPEED,guard:{x,y},layer:L_OVER});
+  const sp=kind==="spider", mc=kind==="molecricket";
+  predators.push({kind,x,y,ang:0,alive:true,respawnT:0,cd:0,wt:0,stunT:0,digT:0,
+    hp:sp?CONFIG.SPIDER_HP:mc?CONFIG.MOLE_HP:CONFIG.BEETLE_HP,
+    maxhp:sp?CONFIG.SPIDER_HP:mc?CONFIG.MOLE_HP:CONFIG.BEETLE_HP,
+    atk:sp?CONFIG.SPIDER_ATK:mc?CONFIG.MOLE_ATK:CONFIG.BEETLE_ATK,
+    cdMax:sp?CONFIG.SPIDER_CD:mc?CONFIG.MOLE_CD:CONFIG.BEETLE_CD,
+    speed:sp?CONFIG.SPIDER_SPEED:mc?CONFIG.MOLE_SPEED:CONFIG.BEETLE_SPEED,
+    guard:{x,y},layer:mc?L_UNDER:L_OVER});
 }
 
+/* ---------------- M5 掠蚁 AI（第二章：偷卵者，原创机制） ---------------- */
+function raiderMove(e,dt,tx,ty){ // 地下移动：沿流场下坡走（复用 v1.32 流场）
+  const cur=gi(clamp(e.x|0,0,GW-1),clamp(e.y|0,0,GH-1)), to=gi(clamp(tx|0,0,GW-1),clamp(ty|0,0,GH-1));
+  const flow=flowField(to);
+  let best=-1,bd=flow[cur];
+  if(bd>=0){
+    for(const d of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=clamp((e.x|0)+d[0],0,GW-1),ny=clamp((e.y|0)+d[1],0,GH-1);
+      if(inGrid(nx,ny)&&isDug(nx,ny)){const dv=flow[gi(nx,ny)];if(dv>=0&&dv<bd){bd=dv;best=gi(nx,ny);}}
+    }
+  }
+  if(best>=0){
+    const ang=Math.atan2((best/GW|0)+0.5-e.y,best%GW+0.5-e.x);e.ang=ang;
+    const sp=CONFIG.ERAIDER_SPEED*dt;e.x+=Math.cos(ang)*sp;e.y+=Math.sin(ang)*sp;e.stuck=0;
+  }else steerEnemy(e,dt,tx,ty,false);
+}
+function nearestBrood(){ // 最近的有卵育婴格
+  let best=null,bd=1e9;
+  for(const b of broods){const x=b.ti%GW+0.5,y=(b.ti/GW|0)+0.5;const d=dist2(NEST.x,NEST.y,x,y);if(d<bd){bd=d;best={ti:b.ti,x,y};}}
+  return best;
+}
+function enemyRaiderStep(e,dt){ // 掠蚁：地表→洞口→下井→抢卵→携卵逃离（出图才算真损失）
+  if(e.phase2==="flee"){ // 携卵逃跑：奔最近洞口并上地表消失
+    if(e.layer===L_UNDER){
+      let h=null,bd=1e9;
+      for(const o of holes){const d=dist2(e.x,e.y,o.ux+0.5,o.uy+0.5);if(d<bd){bd=d;h=o;}}
+      raiderMove(e,dt,h.ux+0.5,h.uy+0.5);
+      if(dist2(e.x,e.y,h.ux+0.5,h.uy+0.5)<1.2){e.layer=L_OVER;e.x=h.sx+0.5;e.y=h.sy+0.5;e.phase2="out";}
+    }else{
+      steerEnemy(e,dt,e.x,e.y-1,false); // 往上跑
+      if(e.y<2){levelState.eggsLost++;toast("⚠ 一枚卵被掠蚁带走了！");e.alive=false;e.dead=true;}
+    }
+    return;
+  }
+  if(e.layer===L_OVER){
+    let h=null,bd=1e9;
+    for(const o of holes){const d=dist2(e.x,e.y,o.sx+0.5,o.sy+0.5);if(d<bd){bd=d;h=o;}}
+    steerEnemy(e,dt,h.sx+0.5,h.sy+0.5,false);
+    if(dist2(e.x,e.y,h.sx+0.5,h.sy+0.5)<1.4){e.layer=L_UNDER;e.x=h.ux+0.5;e.y=h.uy+0.5;e.shaft=null;}
+    return;
+  }
+  // 地下：冲育婴区抢卵
+  const b=nearestBrood();
+  if(!b)return;
+  raiderMove(e,dt,b.x,b.y);
+  if(dist2(e.x,e.y,b.x,b.y)<1.2){
+    const bi=broods.findIndex(x=>x.ti===b.ti);
+    if(bi>=0){e.egg=broods[bi];broods.splice(bi,1);e.phase2="flee";toast("⚠ 掠蚁叼走了一枚卵！");sfx("die");}
+  }
+}
+function levelEggTick(dt){ // 被击杀的掠蚁掉蛋 → 我方工蚁路过拾回
+  for(let i=levelState.eggDrops.length-1;i>=0;i--){
+    const d=levelState.eggDrops[i];
+    for(const a of ants){
+      if(a.caste!=="worker"||a.carry>0)continue;
+      if(dist2(a.x,a.y,d.x,d.y)<1.6){
+        const free=nurseries.find(n=>!broods.some(b=>b.ti===n.ti));
+        if(free){broods.push({ti:free.ti,stage:0,timer:CONFIG.BROOD_EGG,caste:d.caste,group:a.group});}
+        else{const x=NEST.x+(rng()*3-1.5),y=NEST.y+(rng()*2-1);broods.push({ti:gi(x|0,y|0),stage:0,timer:CONFIG.BROOD_EGG,caste:d.caste,group:a.group});}
+        levelState.eggDrops.splice(i,1);toast("拾回一枚被掠蚁抢走的卵");break;
+      }
+    }
+  }
+}
 /* ---------------- 敌群 AI（M2-5） ---------------- */
 function enemyStep(e,dt){
   e.phase+=dt*10;e.atkCd=Math.max(0,e.atkCd-dt);
   if(e.stunT>0){e.stunT-=dt;return;} // M3-2 眩晕打断：眩晕中停摆（不移动不攻击）
+  if(e.caste==="eraider"){enemyRaiderStep(e,dt);return;} // M5 掠蚁：偷卵专属行为
   // 夜间增益只作用于天敌，敌群不受昼夜 buff（保持可读的威胁节律）
   if(e.state==="attack"){
     // 进攻波：奔我方最近洞口 → 竖井下爬（v1.13 废除瞬移：隧道=双方共享咽喉）→ 杀向蚁后
@@ -701,6 +789,9 @@ function damageAnt(a,dmg){
 }
 // 死亡结算
 function onDeath(u,killer){
+  if(u.caste==="eraider"&&u.egg){ // M5：携卵的掠蚁被击杀 → 原地掉蛋（工蚁可拾回，不计损失）
+    levelState.eggDrops.push({x:u.x,y:u.y,caste:u.egg.caste});
+  }
   if(u.kind==="spider"||u.kind==="beetle"){ // 天敌：尸体+重生（不可根除）
     if(!u.alive)return; // 幂等保护：已死天敌不重复结算（防弹道残留/混战补刀双计王浆）
     u.alive=false;u.respawnT=CONFIG.PRED_RESPAWN;
@@ -850,7 +941,27 @@ const TITAN_FOOD=500; // [PH] 巨兽残骸食物储量（一次性大奖励）
 let sfxWave=0;
 
 /* ---------------- 天敌 AI（M2-4） ---------------- */
+function moleStep(p,dt){ // M5 鼹蟋蟀：朝蚁后方向反挖土逼近——挖通玩家巢道即入侵
+  const dx=NEST.x-p.x,dy=NEST.y-p.y,d=Math.hypot(dx,dy);
+  if(d>5){
+    p.digT-=dt;
+    const nx=Math.round(p.x+Math.sign(dx)*1.3),ny=Math.round(p.y+Math.sign(dy)*1.3);
+    if(p.digT<=0&&inGrid(nx,ny)&&!isDug(nx,ny)&&tile[gi(nx,ny)]!==T_ROCK){
+      p.digT=CONFIG.MOLE_DIG;tile[gi(nx,ny)]=T_AIR;digReq[gi(nx,ny)]=0;dirtyMap=true;flowClear();
+      spawnDust(nx,ny,L_UNDER);
+    }
+    const sp=CONFIG.MOLE_SPEED*dt;p.x+=Math.sign(dx)*sp;p.y+=Math.sign(dy)*sp;p.ang=Math.atan2(dy,dx);
+    return;
+  }
+  // 近身：打最近的蚂蚁/蚁后
+  p.cd=Math.max(0,p.cd-dt);
+  const cand=ants.filter(a=>a.layer===L_UNDER);
+  const a=nearestOf(cand,p.x,p.y,1.6);
+  if(a&&p.cd<=0){p.cd=p.cdMax;a.hp-=p.atk;a.lastHitT=simTime;if(a.hp<=0)onDeath(a,p);}
+  else if(dist2(p.x,p.y,queen.x,queen.y)<1.8&&p.cd<=0){p.cd=p.cdMax;queen.hp-=p.atk;sfx("clash");}
+}
 function predStep(p,dt){
+  if(p.kind==="molecricket"){moleStep(p,dt);return;} // M5 鼹蟋蟀专属行为
   if(!p.alive){
     p.respawnT-=dt;
     if(p.respawnT<=0){p.alive=true;p.hp=p.maxhp;p.x=p.guard.x;p.y=p.guard.y;}
@@ -1227,7 +1338,8 @@ function claimDig(a){
   return null;
 }
 function releaseDig(ti){if(digClaims.get(ti)){digClaims.delete(ti);}}
-function digTile(ti){
+function digTile(ti){  if(LEVEL.id==="ch1")levelRoomTrigger(ti); // M5 房间开箱触发
+
   tile[ti]=T_AIR;digReq[ti]=0;digWork[ti]=0;dirtyMap=true;dugCount++;sfx("dig");
 }
 function findFoodNearU(cx,cy,r){
@@ -2133,7 +2245,7 @@ function updateHUD(dt){
   const cnt=[0,0,0];for(const a of ants)cnt[a.group]++;
   const cyc=CONFIG.DAY_LEN+CONFIG.NIGHT_LEN,ph=dayT%cyc;
   const dayIcon=isNight()?"🌙夜":"☀昼", remain=Math.ceil((isNight()?cyc-ph:CONFIG.DAY_LEN-ph));
-  hud.innerHTML=`${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
+  hud.innerHTML=`${LEVEL.id!=="free"?`<span style="color:#ffd9a0">${LEVEL.name}</span>`:""}${levelObjective()} ｜ ${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
     `收入 <b>${R.toFixed(2)}</b>/s ｜ 击杀 <b>${kills}</b> ｜ 各队 <b>${cnt[0]}</b>/<b>${cnt[1]}</b>/<b>${cnt[2]}</b><br>`+
     `用时 <b>${(simTime/60|0)}:${String(simTime%60|0).padStart(2,"0")}</b> ｜ ${view===L_UNDER?"地下":"地表"} ｜ 当前 ${groups[curGroup].name}·${({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule]}`+
     `${queenCd>0?` ｜ <span class="warn">产卵冷却 ${queenCd.toFixed(0)}s</span>`:""}`+
@@ -2172,6 +2284,8 @@ function update(dt){
   if(stockShown>stock)stockShown=stock;
   else if(stockShown<stock)stockShown=Math.min(stock,stockShown+1);
   tutTick(dt); // M4-5 新手引导步进
+  levelTick(dt); // M5 关卡逻辑（房间清出/掠卵波次/胜负）
+  levelEggTick(dt); // M5 被抢卵的拾回
   // M3-3 王浆：存活每半个昼夜天 +1（v1.20 节奏改判：入夜/黎明各结算一次，首枚 4 分钟到账）
   if(dayT-halfMark>=CONFIG.DAY_LEN){
     halfMark+=CONFIG.DAY_LEN;
@@ -2275,7 +2389,10 @@ function loop(ts){
 requestAnimationFrame(loop);
 
 /* ---------------- 开局 / 结算 / 菜单 ---------------- */
-function initGame(seed,key){
+function initGame(seed,key,levelId){
+  if(levelId&&LEVELS[levelId]){LEVEL=LEVELS[levelId];seed=LEVEL.seed||seed;key=LEVEL.diff||"normal";}
+  else LEVEL=LEVELS.free;
+  const CAP=LEVEL.caps||{};
   CONFIG.SEED=seed;rng=mulberry32(seed);
   diffKey=key;DIFF=CONFIG.DIFF[key];
   // 重置全部状态
@@ -2296,28 +2413,40 @@ function initGame(seed,key){
   genUnder();
   genSurface();
   phU=makeField(GW,GH);phS=makeField(SGW,SGH);
-  // 我方初始
-  for(let i=0;i<CONFIG.START_WORKERS;i++)addAnt(NEST.x+(rng()*4-2),NEST.y+(rng()*2-1),"worker",0,L_UNDER);
+  // 我方初始（关卡可覆写起始蚁数/育婴格/食物）
+  const startAnts=LEVEL.startAnts!=null?LEVEL.startAnts:CONFIG.START_WORKERS;
+  const startNur=LEVEL.nurseries!=null?LEVEL.nurseries:CONFIG.START_NURSERY;
+  if(LEVEL.startFood!=null){stock=LEVEL.startFood;stockShown=LEVEL.startFood;}
+  for(let i=0;i<startAnts;i++)addAnt(NEST.x+(rng()*4-2),NEST.y+(rng()*2-1),"worker",0,L_UNDER);
+  if(LEVEL.startSoldiers)for(let i=0;i<LEVEL.startSoldiers;i++)addAnt(NEST.x+(rng()*4-2),NEST.y+(rng()*2-1),"soldier",0,L_UNDER);
   let placed=0;
-  for(let x=-5;x<=5&&placed<CONFIG.START_NURSERY;x++){
+  for(let x=-5;x<=5&&placed<startNur;x++){
     const tx=NEST.x+x,ty=NEST.y+3;
     if(isDug(tx,ty)&&!isShaft(tx,ty)){nurseries.push({ti:gi(tx,ty)});placed++;}
   }
   queen={x:NEST.x,y:NEST.y-1,phase:0,hp:CONFIG.QUEEN_HP,maxhp:CONFIG.QUEEN_HP}; // v1.19 我方蚁后独立血量（原 200 太脆）
   // 敌群初始（按难度缩放）
-  const ew=Math.round(CONFIG.E_START.eworker*DIFF.scale),es=Math.round(CONFIG.E_START.esoldier*DIFF.scale);
-  for(let i=0;i<ew;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),"eworker");
-  for(let i=0;i<es;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),"esoldier");
+  if(CAP.waves!==false){ // M5 关卡 caps.waves=false：不生成敌群（第一章纯地下/第二章只有掠蚁）
+    const ew=Math.round(CONFIG.E_START.eworker*DIFF.scale),es=Math.round(CONFIG.E_START.esoldier*DIFF.scale);
+    for(let i=0;i<ew;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),"eworker");
+    for(let i=0;i<es;i++)addEnemy(enemyNest.x+(rng()*6-3),enemyNest.y+(rng()*6-3),"esoldier");
+  }else{enemyNest.dead=true;enemyNest.food=0;waveTimer=1e9;}
+  if(CAP.titan===false)titanTimer=-1;
   // 天敌：蜘蛛守高价值点，甲虫游荡（数量随难度）
   const guards=[...sSources].sort((a,b)=>b.cap-a.cap);
   const nSp=Math.round(2*DIFF.pred),nBe=Math.round(2*DIFF.pred);
-  for(let i=0;i<nSp;i++){const g=guards[i%guards.length];addPred("spider",g.x+2,g.y+2);predators[predators.length-1].guard={x:g.x+2,y:g.y+2};}
-  for(let i=0;i<nBe;i++)addPred("beetle",40+rng()*40,40+rng()*40);
+  if(CAP.preds!==false){ // M5：第一章无天敌
+    for(let i=0;i<nSp;i++){const g=guards[i%guards.length];addPred("spider",g.x+2,g.y+2);predators[predators.length-1].guard={x:g.x+2,y:g.y+2};}
+    for(let i=0;i<nBe;i++)addPred("beetle",40+rng()*40,40+rng()*40);
+  }
   // UI 复位
   document.querySelectorAll(".gsel").forEach(x=>x.classList.toggle("active",+x.dataset.g===0));
   document.getElementById("btn-rule").textContent="规则：采集";
   document.getElementById("btn-view").innerHTML="⇄<small>去地表</small>";
+  document.getElementById("btn-view").style.display=CAP.surface===false?"none":"";
   view=L_UNDER;inGame=true;
+  levelState={rooms:[],roomsDone:0,raids:0,raidWave:0,eggsLost:0,raidTimer:0,eggDrops:[]};
+  if(LEVEL.id!=="free"){toast(LEVEL.name+"："+LEVEL.objective);levelInit();}
   document.getElementById("menu").style.display="none";
   document.getElementById("report").style.display="none";
   toast("难度 "+({easy:"简单",normal:"普通",hard:"困难"})[key]+" ｜ 种子 "+seed);
@@ -2331,6 +2460,14 @@ function endGame(win){
   meta.games++;if(win)meta.wins++;meta.bestMin=Math.max(meta.bestMin,simTime/60|0);metaSave(); // M4-2 跨局战绩
   sfx(win?"win":"lose");
   const rp=document.getElementById("report");
+  if(LEVEL.id!=="free"){ // M5 关卡结算：目标达成说明 + 评分
+    const sc=LEVEL.id==="ch1"?(levelState.roomsDone>=12&&ants.length>=25?3:(levelState.roomsDone>=8?2:1))
+      :(levelState.eggsLost===0?3:(levelState.eggsLost<=3?2:1));
+    const stars="★".repeat(sc)+"☆".repeat(3-sc);
+    setTimeout(()=>{const t=document.querySelector("#report .panel");if(t)t.insertAdjacentHTML("afterbegin",
+      `<div style="font-size:14px;color:#ffd9a0;margin-bottom:6px">${LEVEL.name} 通关  ${stars}</div>
+       <div style="font-size:12px;opacity:.85;margin-bottom:8px">${levelState.reason||""}${LEVEL.id==="ch1"?` ｜ 土室 ${levelState.roomsDone}/12 ｜ 蚁群 ${ants.length}`:` ｜ 击退 ${levelState.raids}/4 ｜ 被抢卵 ${levelState.eggsLost}`} ｜ 奖励 🍯${(LEVEL.reward||{}).jelly||0}</div>`);},0);
+  }
   document.getElementById("rp-title").textContent=win?"🎉 灭巢成功 · 里程碑":"💀 蚁后陨落";
   document.getElementById("rp-sub").textContent=win?"敌群蚁后被击杀——王浆 +"+CONFIG.JELLY_NEST+"（升级面板随时可花）":"你的蚁巢就此终结";
   document.getElementById("rp-stats").innerHTML=
@@ -2340,6 +2477,27 @@ function endGame(win){
     `🍯 王浆累计 <b>${jellyEarned}</b>（当前储备 ${jelly}） ｜ 敌群策略 <b>${STRAT.label.split(" · ")[0]}</b>`;
   document.getElementById("rp-continue").style.display=win?"block":"none";
   rp.style.display="flex";
+}
+function campaignList(){
+  const el=document.getElementById("campaign-list");el.innerHTML="";
+  for(const id of ["ch1","ch2"]){
+    const L=LEVELS[id],done=meta[id];
+    const d=document.createElement("div");
+    d.style.cssText="background:rgba(16,12,8,.6);border:1px solid rgba(232,217,184,.15);border-radius:10px;padding:10px;margin:8px 0";
+    d.innerHTML=`<div style="font-size:14px;color:#ffb45e;font-weight:700">${L.name} ${done?"<span style='color:#8fc255'>✓ 已通关</span>":""}</div>
+      <div style="font-size:12px;opacity:.8;margin:4px 0">${L.brief}</div>
+      <div style="font-size:12px;opacity:.65;margin-bottom:6px">目标：${L.objective} ｜ 通关奖励 🍯${L.reward.jelly}</div>`;
+    const b=document.createElement("button");
+    b.className="btn";b.style.cssText="min-width:120px";b.textContent="进入本章";
+    b.addEventListener("click",()=>{document.getElementById("campaign").style.display="none";startLevel(id);});
+    d.appendChild(b);el.appendChild(d);
+  }
+}
+document.getElementById("btn-campaign").addEventListener("click",()=>{campaignList();document.getElementById("campaign").style.display="flex";});
+document.getElementById("btn-campaign-back").addEventListener("click",()=>{document.getElementById("campaign").style.display="none";});
+function startLevel(id){ // 进入关卡：关卡定义驱动引擎
+  initGame(LEVELS[id].seed,LEVELS[id].diff||"normal",id);
+  document.getElementById("campaign").style.display="none";
 }
 document.getElementById("btn-start").addEventListener("click",()=>{
   const s=document.getElementById("inp-seed").value.trim();
@@ -2370,9 +2528,103 @@ document.getElementById("rp-restart").addEventListener("click",()=>{
   showContinueBtn(); // 回菜单刷新「继续」按钮（存档可能已更新）
 });
 
+/* ---------------- M5 关卡玩法层（战役任务单 v1.0 实现） ---------------- */
+const CH1_ROOMS=[ // 相对蚁后室偏移 [dx,dy,类型,内容量]：四环 12 房
+  [-7,-4,"food",30],[7,-5,"food",30],                                  // 内环 2 食物
+  [-12,-7,"food",35],[12,-8,"food",35],[2,-13,"beetle",1],             // 二环 2 食物+1 甲虫
+  [-17,-12,"food",40],[17,-13,"beetle",4],[-4,-20,"beetle",4],         // 三环 1 食物+2 甲虫
+  [24,-19,"food",60],[-25,-17,"mole",1],[8,-26,"empty",0],[-27,-8,"empty",0]]; // 外环 大食物+鼹蟋蟀+2 空
+const CH2_RAIDS=[ // 第二章掠卵袭扰时间表（dayT 秒）：1 昼夜=480s
+  {t:500,n:3,guard:0},{t:760,n:5,guard:0},{t:1000,n:8,guard:1},{t:1250,n:12,guard:2}];
+function levelInit(){
+  if(LEVEL.id==="ch1"){
+    levelState.rooms=CH1_ROOMS.map((r,i)=>{
+      const cx=NEST.x+r[0],cy=NEST.y+r[1],tis=[];
+      for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)if(inGrid(x,y))tis.push(gi(x,y));
+      return {id:i,cx,cy,type:r[2],content:r[3],tis,opened:false,done:false};
+    });
+  }
+  if(LEVEL.id==="ch2")levelState.raidPlan=CH2_RAIDS.map(r=>Object.assign({},r));
+}
+function levelRoomTrigger(ti){ // 房间开箱：挖开房内任一格 → 整房打开 + 内容出现
+  for(const r of levelState.rooms){
+    if(r.opened||!r.tis.includes(ti))continue;
+    r.opened=true;
+    for(const t of r.tis){tile[t]=T_AIR;digReq[t]=0;}
+    dirtyMap=true;flowClear();
+    if(r.type==="food"){tileFood[gi(r.cx,r.cy)]=r.content;toast("土室里有东西——是食物。");}
+    else if(r.type==="beetle"){for(let i=0;i<r.content;i++)addPred("beetle",r.cx+(i%2),r.cy+(i/2|0));toast("⚠ 有东西醒了。先撤，攒够兵蚁再回来。");sfx("alarm");}
+    else if(r.type==="mole"){addPred("molecricket",r.cx,r.cy);toast("深处有更大的动静。它听见你了。");sfx("roar");}
+    else toast("空室。");
+    sfx("mark");
+    return;
+  }
+}
+function levelTick(dt){
+  if(LEVEL.id==="free"||!inGame)return;
+  if(LEVEL.id==="ch1"){
+    for(const r of levelState.rooms){
+      if(r.opened&&!r.done){
+        let alive=0;
+        for(const p of predators)if(p.alive&&Math.abs(p.x-r.cx)<3.5&&Math.abs(p.y-r.cy)<3.5)alive++;
+        if(alive===0){r.done=true;levelState.roomsDone++;toast("土室清出（"+levelState.roomsDone+"/12）");}
+      }
+    }
+    if(levelState.roomsDone>=12&&ants.length>=25)levelWin("12 个土室全清，蚁群已成军");
+  }
+  if(LEVEL.id==="ch2"){
+    while(levelState.raidPlan&&levelState.raidPlan.length&&simTime>=levelState.raidPlan[0].t){
+      const w=levelState.raidPlan.shift();
+      levelState.raids++;levelState.raidWave=w;
+      spawnRaiders(w);
+    }
+    if(levelState.raids>=4&&simTime>=1440)levelWin("掠蚁知难而退，滩头姓你了");
+  }
+}
+function spawnRaiders(w){ // 第二章：掠蚁从地表远角掠蚁巢出发 → 下竖井 → 抢卵
+  const base=enemyNest;
+  for(let i=0;i<w.n;i++){
+    const e=addEnemy(base.x+(rng()*6-3),base.y+(rng()*6-3),"eraider",L_OVER);
+    e.raid=true;e.egg=null;e.phase="seek";
+  }
+  for(let i=0;i<w.guard;i++){
+    const e=addEnemy(base.x+(rng()*8-4),base.y+(rng()*8-4),"eraiderGuard",L_OVER);
+    e.raid=true;e.egg=null;e.phase="seek";
+  }
+  toast("⚠ 掠蚁来了——"+w.n+" 只冲向你的育婴室！");
+  sfx("alarm");
+}
+function levelWin(reason){ // 关卡通关：奖励入 meta + 战报
+  if(!inGame)return;
+  const r=LEVEL.reward||{jelly:0};
+  jelly+=r.jelly;jellyEarned+=r.jelly;
+  meta.jellyTotal=(meta.jellyTotal|0)+r.jelly;meta[LEVEL.id]=1;metaSave();
+  levelState.reason=reason;
+  endGame(true);
+}
+function levelObjective(){ // HUD 目标行
+  if(LEVEL.id==="free")return "";
+  if(LEVEL.id==="ch1")return "｜ 目标：土室 "+levelState.roomsDone+"/12 ｜ 蚁群 "+ants.length+"/25";
+  return "｜ 目标：击退掠蚁 "+levelState.raids+"/4 ｜ 存活 "+Math.floor(simTime/60)+"/24 分钟";
+}
 /* ---------------- 存档（M4-2 核心提前落地 v1.23）：单槽自动存 20s + 继续按钮 + 隐私模式提示 ----------------
    地图/源/岩由种子重生成，不存 tile；只存动态状态。版本字段防坏档；隐私模式静默降级+菜单提示。 */
-const SAVE_KEY="antnest_save_v1";
+/* ---------------- M5 战役：关卡定义（关卡=引擎+配置脚本，战役任务单 v1.0） ---------------- */
+const LEVELS={
+  free:{id:"free",name:"自由局",brief:"无尽沙盒：自己定节奏",caps:{}},
+  ch1:{id:"ch1",name:"第一章 · 筑巢",brief:"纯地下：挖开隐藏房间，清出全巢",seed:1101,
+    startFood:80,startAnts:7,startSoldiers:0,nurseries:6,
+    caps:{surface:false,daynight:false,waves:false,titan:false,preds:false},
+    reward:{jelly:3},objective:"清出全部 12 个房间 ＋ 蚁群达 25"},
+  ch2:{id:"ch2",name:"第二章 · 滩头",brief:"海滩立足：活过三昼夜，击退 4 次掠卵袭扰",seed:2202,
+    startFood:100,startAnts:7,startSoldiers:2,nurseries:8,
+    caps:{surface:true,daynight:true,waves:false,titan:false,preds:true},
+    reward:{jelly:5},objective:"存活满 3 个昼夜 ＋ 击退全部 4 次掠卵袭扰"},
+};
+let LEVEL=LEVELS.free;
+let levelState={rooms:[],roomsDone:0,raids:0,raidWave:0,eggsLost:0,raidTimer:0,eggDrops:[]};
+const SAVE_KEY_BASE="antnest_save_v1";
+function saveKey(){return SAVE_KEY_BASE+"_"+(LEVEL?LEVEL.id:"free");} // 存档按关卡分档，互不覆盖
 // v1.29 RLE 行程压缩：地图数组大部分是常量（土/0），编码 [值,长度,...] 对——6144 项压到 ~1KB
 function rleEnc(arr){const o=[];let cur=arr[0],n=1;
   for(let i=1;i<arr.length;i++){if(arr[i]===cur&&n<65535)n++;else{o.push(cur,n);cur=arr[i];n=1;}}
@@ -2383,7 +2635,7 @@ let saveBlocked=false;
 function saveGame(){
   if(!inGame)return;
   try{
-    localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,seed:CONFIG.SEED,diffKey,
+    localStorage.setItem(saveKey(),JSON.stringify({v:1,seed:CONFIG.SEED,diffKey,level:LEVEL.id,
       stock:Math.floor(stock),jelly,jellyEarned,jellyUpgrades,jellyLevels,simTime:Math.floor(simTime),dayT,halfMark,
       kills,peakPop,waveNo,endlessScale,stratKey,queenHp:queen?Math.ceil(queen.hp):0,curGroup,
       ants:ants.map(a=>({c:a.caste,g:a.group,hp:Math.round(a.hp),x:+a.x.toFixed(2),y:+a.y.toFixed(2),l:a.layer})),
@@ -2401,13 +2653,13 @@ function saveGame(){
       titanAnnounced,titanTimer:Math.ceil(titanTimer)}));
   }catch(e){if(!saveBlocked){saveBlocked=true;toast("⚠ 当前浏览器无法存档（隐私模式）——刷新将丢失进度");}}
 }
-function loadSave(){try{return JSON.parse(localStorage.getItem(SAVE_KEY)||"null");}catch(e){return null;}}
-function clearSave(){try{localStorage.removeItem(SAVE_KEY);}catch(e){}}
+function loadSave(){try{return JSON.parse(localStorage.getItem(saveKey())||"null");}catch(e){return null;}}
+function clearSave(){try{localStorage.removeItem(saveKey());}catch(e){}}
 function showContinueBtn(){try{document.getElementById("btn-continue").style.display=loadSave()?"block":"none";}catch(e){}}
 function continueGame(){
   const d=loadSave();
   if(!d||d.v!==1){toast("没有可继续的存档");return;}
-  initGame(d.seed,d.diffKey); // 种子重放生成地图（策略同 seed 同 roll），以下覆盖动态状态
+  initGame(d.seed,d.diffKey,d.level||"free"); // 种子重放生成地图（策略同 seed 同 roll），d.level 恢复关卡标识
   stock=d.stock;jelly=d.jelly;jellyEarned=d.jellyEarned;
   jellyUpgrades=Object.assign({worker:null,soldier:null,ranged:null,tank:null},d.jellyUpgrades);
   jellyLevels=Object.assign({worker:1,soldier:1,ranged:1,tank:1},d.jellyLevels);
@@ -2448,12 +2700,13 @@ document.getElementById("btn-continue").addEventListener("click",continueGame);
 
 /* ---------------- M4-2 跨局 meta（战绩独立存储）+ M4-5 新手引导 ---------------- */
 const META_KEY="antnest_meta_v1";
-let meta={games:0,wins:0,bestMin:0,tut:0};
+let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,ch1:0,ch2:0};
 try{Object.assign(meta,JSON.parse(localStorage.getItem(META_KEY)||"{}"));}catch(e){}
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(meta));}catch(e){}}
 function metaLine(){
   const el=document.getElementById("meta-line");if(!el)return;
-  el.textContent=meta.games?("战绩：已开 "+meta.games+" 巢 ｜ 灭巢 "+meta.wins+" 次 ｜ 最长存活 "+meta.bestMin+" 分钟"):"首巢待启——祝武运昌隆";
+  el.textContent=meta.games?("战绩：已开 "+meta.games+" 巢 ｜ 灭巢 "+meta.wins+" 次 ｜ 最长存活 "+meta.bestMin+" 分钟 ｜ 战役 "+(meta.ch1?1:0)+"/2 ｜ 累计王浆 "+(meta.jellyTotal|0))
+    :"首巢待启——祝武运昌隆";
 }
 const TUT=[
   {t:"① 挖掘：选 ⛏️ 工具，朝黄色源连点挖一条通道",done:()=>dugCount>=3},
@@ -2780,7 +3033,7 @@ if(new URLSearchParams(location.search).has("autotest")){
     assert("同种子地图逐格一致",hashA===hashB);
     // 11. 存档/读档（M4-2 核心）
     step("存档单测",()=>saveGame());
-    const savedSnap=JSON.parse(localStorage.getItem("antnest_save_v1"));
+    const savedSnap=JSON.parse(localStorage.getItem(saveKey())); // v2.0 存档按关卡分键
     assert("存档写入",!!savedSnap&&savedSnap.v===1);
     step("篡改状态",()=>{stock=777;jelly=42;ants.length=0;});
     step("读档",()=>continueGame());
