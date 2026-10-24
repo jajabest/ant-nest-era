@@ -144,7 +144,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.30 · M4 全量交付（音效/引导/战绩/挡板）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.31（L 形走廊）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -417,7 +417,7 @@ function genSurface(){
   const shaftUy=NEST.y-14; // 竖井底比蚁后室高 14 格（竖井总长不变，通勤时间不变）
   holes=[{ux:shaftUx,uy:shaftUy,sx:home.sx,sy:home.sy}];
   digShaft(holes[0]);
-  carveCorridor(shaftUx,shaftUy,NEST.x,NEST.y-4); // 竖井底→蚁后室顶初始走廊（1 格宽，天然伏击点）
+  carveCorridor(shaftUx,shaftUy,NEST.x,NEST.y-2); // 竖井底→竖直下挖→蚁后室上沿侧翼横接（L 形正交，伏击线不变）
   carveClear(home.sx,home.sy);carveClear(enemyNest.x,enemyNest.y);
   // 连通性校验（M2-9 生成约束）：BFS 不可达的点开一条 1 格宽路
   ensureConnected(home);
@@ -429,15 +429,11 @@ function carveClear(x,y){
     if(inSur(x+dx,y+dy)&&sTile[sgi(x+dx,y+dy)]===S_BLOCK)sTile[sgi(x+dx,y+dy)]=S_GRASS;
   }
 }
-function carveCorridor(x0,y0,x1,y1){ // 地下走廊：Bresenham 1 格宽（含上下邻格），覆盖基岩保证连通（v1.22 主竖井错位配套）
-  const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));
-  for(let i=0;i<=n;i++){
-    const x=Math.round(x0+(x1-x0)*i/Math.max(1,n)), y=Math.round(y0+(y1-y0)*i/Math.max(1,n));
-    for(let dy=0;dy<=0;dy++){
-      const xi=x,yi=y+dy;
-      if(inGrid(xi,yi)&&tile[gi(xi,yi)]!==T_SHAFT)tile[gi(xi,yi)]=T_AIR;
-    }
-  }
+function carveCorridor(x0,y0,x1,y1){ // v1.31 战神截图反馈：斜走廊（楼梯状）难看 → L 形正交直线——竖直段（竖井底直下）+横向段（蚁后室侧翼接入），纵深不变
+  for(let y=Math.min(y0,y1);y<=Math.max(y0,y1);y++) // 竖直段：x=x0 直下
+    if(inGrid(x0,y)&&tile[gi(x0,y)]!==T_SHAFT)tile[gi(x0,y)]=T_AIR;
+  for(let x=Math.min(x0,x1);x<=Math.max(x0,x1);x++) // 横向段：y=y1 横移接蚁后
+    if(inGrid(x,y1)&&tile[gi(x,y1)]!==T_SHAFT)tile[gi(x,y1)]=T_AIR;
   dirtyMap=true;
 }
 function carveLine(x0,y0,x1,y1){ // 1 格宽走廊
