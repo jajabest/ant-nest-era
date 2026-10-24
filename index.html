@@ -144,7 +144,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.31（L 形走廊）</div>
+    <div class="sub2">M3 · 蚁种与进阶 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 ｜ v1.32（流场寻路）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -416,7 +416,7 @@ function genSurface(){
   const shaftUx=clamp(NEST.x+(rng()<0.5?-1:1)*(12+(rng()*6|0)),4,GW-5);
   const shaftUy=NEST.y-14; // 竖井底比蚁后室高 14 格（竖井总长不变，通勤时间不变）
   holes=[{ux:shaftUx,uy:shaftUy,sx:home.sx,sy:home.sy}];
-  digShaft(holes[0]);
+  digShaft(holes[0]);flowClear();
   carveCorridor(shaftUx,shaftUy,NEST.x,NEST.y-2); // 竖井底→竖直下挖→蚁后室上沿侧翼横接（L 形正交，伏击线不变）
   carveClear(home.sx,home.sy);carveClear(enemyNest.x,enemyNest.y);
   // 连通性校验（M2-9 生成约束）：BFS 不可达的点开一条 1 格宽路
@@ -1114,11 +1114,11 @@ function steerAnt(a,dt,tx,ty,pherTurn,homing){
   a.wa+=(rng()-0.5)*CONFIG.WANDER*dt*8;
   a.wa*=0.95;
   a.ang=want+a.wa*0.15;
-  tryMove(a,dt,homing);
+  tryMove(a,dt,homing,tx,ty);
 }
 function moveSteer(a,dt,tx,ty,range){
   if(dist2(a.x,a.y,tx,ty)>range*range){steerAnt(a,dt,tx,ty,0,false);}
-  else{a.ang+=(rng()-0.5)*dt*1.5;a.slowK=0.4;tryMove(a,dt,false);a.slowK=1;} // 巢内缓步+慢转向（v1.12 抖动修复：原每帧±2.3°随机转+边界振荡）
+  else{a.ang+=(rng()-0.5)*dt*1.5;a.slowK=0.4;tryMove(a,dt,false,tx,ty);a.slowK=1;} // 巢内缓步+慢转向（v1.12 抖动修复：原每帧±2.3°随机转+边界振荡）
 }
 function moveSteerOver(a,dt,tx,ty,range){
   if(dist2(a.x,a.y,tx,ty)>range*range){steerAnt(a,dt,tx,ty,0,false);}
@@ -1128,13 +1128,31 @@ function moveToward(a,dt,tx,ty,digging){
   const d=Math.atan2(ty-a.y,tx-a.x);
   let da=d-a.ang;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;
   a.ang+=clamp(da,-dt*6,dt*6);
-  return tryMove(a,dt,digging);
+  return tryMove(a,dt,digging,tx,ty);
 }
 function antSpeed(a){
   const base=CONFIG.ANT_SPEED*statOf(a,"spd");
   return base*(a.slowK||1); // slowK：巢内/驻扎缓步（v1.12 抖动修复）
 }
-function tryMove(a,dt,digging){ // 分层派发：地表蚂蚁走俯视移动
+/* ---------------- v1.32 流场寻路（撞土不硬撞）：目标距离场 BFS，全蚁共享缓存，挖掘后失效 ---------------- */
+const flowCache=new Map();let flowOrder=[];
+function flowField(to){ // 从目标反算 BFS 距离场：蚂蚁查邻格 dist 走下坡=沿已挖通路绕行
+  if(flowCache.has(to))return flowCache.get(to);
+  const dist=new Int16Array(GW*GH).fill(-1);
+  const q=[to];dist[to]=0;
+  for(let qi=0;qi<q.length;qi++){
+    const c=q[qi],cx=c%GW,cy=(c/GW)|0;
+    for(const d of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=cx+d[0],ny=cy+d[1];
+      if(inGrid(nx,ny)){const ni=gi(nx,ny);if(dist[ni]<0&&isDug(nx,ny)){dist[ni]=dist[c]+1;q.push(ni);}}
+    }
+  }
+  flowCache.set(to,dist);flowOrder.push(to);
+  if(flowOrder.length>10)flowCache.delete(flowOrder.shift()); // LRU 10 个场（每个 12KB）
+  return dist;
+}
+function flowClear(){flowCache.clear();flowOrder.length=0;}
+function tryMove(a,dt,digging,tx,ty){ // 分层派发：地表蚂蚁走俯视移动；tx/ty=移动目标（流场用）
   if(a.layer===L_OVER)return tryMoveOver(a,dt,digging);
   const sp=antSpeed(a)*dt;
   const nx=a.x+Math.cos(a.ang)*sp, ny=a.y+Math.sin(a.ang)*sp;
@@ -1145,9 +1163,28 @@ function tryMove(a,dt,digging){ // 分层派发：地表蚂蚁走俯视移动
     const ti=gi(txi,tyi);
     digWork[ti]+=dt;
     if(rng()<dt*6)spawnDust(txi,tyi,L_UNDER);
-    if(digWork[ti]>=CONFIG.DIG_WORK)digTile(ti);
+    if(digWork[ti]>=CONFIG.DIG_WORK){digTile(ti);flowClear();}
     a.stuck+=dt*0.2;
     return false;
+  }
+  // v1.32 流场绕行：前方是土 → 查目标距离场，走向 dist 更小的已挖邻格（不顶墙）
+  if(tx!==undefined){
+    const cur=gi(clamp(a.x|0,0,GW-1),clamp(a.y|0,0,GH-1)), toTi=gi(clamp(tx|0,0,GW-1),clamp(ty|0,0,GH-1));
+    const flow=flowField(toTi);
+    let best=-1,bd=flow[cur];
+    if(bd<0){ // 蚂蚁所在格与目标不连通（理论不该发生）：走兜底滑移
+      a.stuck+=dt;return false;
+    }
+    for(const d of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=clamp((a.x|0)+d[0],0,GW-1), ny=clamp((a.y|0)+d[1],0,GH-1);
+      if(inGrid(nx,ny)&&isDug(nx,ny)){const dv=flow[gi(nx,ny)];if(dv>=0&&dv<bd){bd=dv;best=gi(nx,ny);}}
+    }
+    if(best>=0){
+      const angB=Math.atan2((best/GW|0)+0.5-a.y,best%GW+0.5-a.x);
+      a.ang=angB;
+      const mx=a.x+Math.cos(angB)*sp, my=a.y+Math.sin(angB)*sp;
+      if(isDug(mx|0,my|0)){a.x=mx;a.y=my;a.stuck=Math.max(0,a.stuck-dt*2);return true;}
+    }
   }
   const offs=[0.9,-0.9,1.9,-1.9,2.8,-2.8];
   for(const o of offs){
@@ -1278,7 +1315,7 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       if(stock<CONFIG.HOLE_COST){toast("食物不足（需 "+CONFIG.HOLE_COST+"）");return;}
       stock-=CONFIG.HOLE_COST;
       const h={ux:tx,uy:ty,sx:clamp(tx,6,SGW-6),sy:clamp(70+(rng()*36-18)|0,6,SGH-6)};
-      holes.push(h);digShaft(h);carveClear(h.sx,h.sy);
+      holes.push(h);digShaft(h);flowClear();flowClear();carveClear(h.sx,h.sy);
       toast("新入口打通（地下 x="+tx+" → 地表）");
     }else if(tool==="demolish"){
       const ni=nurseries.findIndex(n=>n.ti===ti);
