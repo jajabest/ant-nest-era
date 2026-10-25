@@ -95,6 +95,7 @@
   <button class="btn active" data-tool="mark">🧭<small>采集标记</small></button>
   <button class="btn" data-tool="dig">⛏️<small>挖掘</small></button>
   <button class="btn" data-tool="nursery">🧱<small>育婴格 15</small></button>
+  <button class="btn" data-tool="granary">🏗<small>粮仓 30</small></button>
   <button class="btn" data-tool="egg">🥚<small>工蚁卵 10</small></button>
   <button class="btn" data-tool="eggs">🪖<small>兵蚁卵 25</small></button>
   <button class="btn" id="tb-eggr" data-tool="eggr">🧪<small>远程卵 30</small></button>
@@ -153,7 +154,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v3.2（解锁价定版 3/6）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v3.3（粮仓扩容）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -220,7 +221,10 @@ const CONFIG = {
   REPLACEMENT_K: 0.6,           // [PH] 替补费=全价 60%（工6/兵15/远18/坦24——「不会扣很多」但有战损成本，防无脑兵海）
   REPLACEMENT_T: 15,            // [PH] 替补孵化 15s（原 30s 链减半：死亡→扣费→15s 归队，保留战损窗口又够爽快）
   U: 0,                         // §5 维持消耗：2026-10-11 战神裁决移除（「只有生蛋的时候再扣」）——sink 只剩建造/孵化，通胀护栏注记见 §5；保留行位防误回填
-  STOCK_CAP: 200,               // [PH] §3 边界：库存满则采集暂停（M1 终审落地）
+  STOCK_CAP: 200,               // [PH] 基础库存上限（粮仓可扩建）
+  GRANARY_COST: 30,             // [PH] 粮仓建造成本（战神 v3.3 需求「粮仓可以建设提高食物上限」）
+  GRANARY_CAP: 100,             // [PH] 每座粮仓 +100 上限
+  GRANARY_REFUND: 15,           // [PH] 拆除返一半
   // STARVE_SLOW 已随维持消耗一并移除（2026-10-11 战神裁决）——断粮仅 HUD 警示（没钱生蛋）
   SRC_CAP: 50, SRC_R_SHALLOW: 0.45, SRC_R_DEEP: 0.68, // v1.28 战神反馈「获得食物速度慢」：稳态收入 +50%（0.90→1.35/s 理论值）——王浆/兵籍替补 60% 费等新 sink 加入后食物经济需更多流入；LOAD_TIME 2→1.5 同步提搬运节奏
   SRC_FLOOR_K: 0.3,             // [PH] 源残量线 30%（2026-10-11 战神反馈「食物采不完」：主储量 70% 可采空，枯竭线以下由供给率滴灌——稳态收入=R 不变，储量红利变一次性）
@@ -522,6 +526,8 @@ function phSense(f,arr,x,y,ang,passable){
 
 /* ---------------- 全局状态（initGame 重置） ---------------- */
 let stock=0, queenCd=0, collected=0, collectedS=0, dugCount=0, rescues=0;
+let granaries=[]; // v3.3 粮仓：每座 +GRANARY_CAP 上限
+function capNow(){return CONFIG.STOCK_CAP+granaries.length*CONFIG.GRANARY_CAP;}
 let stockShown=0; // v1.28 食物显示层：每帧 +1 追赶真值（入库从 +5 跳变改为一个点一个点累加）
 let starvingNow=false, dayT=0, kills=0, peakPop=0, waveNo=0, simTime=0;
 let waveTimer=0, fogTimer=0;
@@ -1092,8 +1098,8 @@ function antStepUnder(a,dt){
     if(a.timer<=0){
       const d=claimDig(a);
       if(d){a.state="dig";a.tgt=d;return;}
-      if(markers.some(m=>m.layer===L_UNDER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP){a.state="forage";return;}
-      if(markers.some(m=>m.layer===L_OVER&&m.group===a.group)&&stock<CONFIG.STOCK_CAP&&!(isNight()&&a.rule!=="combat")){a.state="goup";return;} // 本组地表有活儿：上行（v1.26 夜间豁免——原条件无昼夜检查，夜间折返蚁进洞即被再派出，在洞口反复进出=一直抖）
+      if(markers.some(m=>m.layer===L_UNDER&&m.group===a.group)&&stock<capNow()){a.state="forage";return;}
+      if(markers.some(m=>m.layer===L_OVER&&m.group===a.group)&&stock<capNow()&&!(isNight()&&a.rule!=="combat")){a.state="goup";return;} // 本组地表有活儿：上行（v1.26 夜间豁免——原条件无昼夜检查，夜间折返蚁进洞即被再派出，在洞口反复进出=一直抖）
       a.timer=1+rng()*2;a.ang=rng()*6.283;
     }
     moveSteer(a,dt,NEST.x,NEST.y,2.5);
@@ -1155,10 +1161,10 @@ function antStepUnder(a,dt){
     phDeposit(f,f.food,a.x,a.y,CONFIG.PHER_DEPOSIT*dt);
     if(dist2(a.x,a.y,NEST.x,NEST.y)<2.2){
       if(a.carryJelly){jelly+=a.carry;jellyEarned+=a.carry;} // v1.25 王浆入账（不占食物仓）
-      else stock=Math.min(CONFIG.STOCK_CAP,stock+a.carry);sfx("food");
+      else stock=Math.min(capNow(),stock+a.carry);sfx("food");
       if(a.carryFrom!==L_OVER)collected+=a.carry; // 地表产量已计入 collectedS，不双计
       a.carry=0;a.carryJelly=false;a.state="forage";a.timer=0;
-      if(!markers.some(m=>m.layer===L_UNDER)||stock>=CONFIG.STOCK_CAP)a.state="idle";
+      if(!markers.some(m=>m.layer===L_UNDER)||stock>=capNow())a.state="idle";
     }
     return;
   }
@@ -1169,7 +1175,7 @@ function antStepOver(a,dt){
     a.timer-=dt;
     if(a.timer<=0){
       const hasMark=markers.some(m=>m.layer===L_OVER&&m.group===a.group);
-      if(hasMark&&stock<CONFIG.STOCK_CAP&&!(isNight()&&a.rule!=="combat")){a.state="forage";return;}
+      if(hasMark&&stock<capNow()&&!(isNight()&&a.rule!=="combat")){a.state="forage";return;}
       if(isNight()&&a.rule!=="combat"||!hasMark){a.state="return";return;} // 夜间收缩回地下 / 本组无地表标记回地下
       a.timer=1+rng()*2;a.ang=rng()*6.283;
     }
@@ -1418,6 +1424,14 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       if(nurseries.some(n=>n.ti===ti)){toast("这里已有育婴格");return;}
       if(stock<CONFIG.NURSERY_COST){toast("食物不足（需 "+CONFIG.NURSERY_COST+"）");return;}
       stock-=CONFIG.NURSERY_COST;nurseries.push({ti});
+    }else if(tool==="granary"){
+      const cost=CONFIG.GRANARY_COST;
+      if(isShaft(tx,ty)){toast("竖井不可占建");return;}
+      if(granaries.some(g2=>g2.ti===ti)||nurseries.some(n2=>n2.ti===ti)){toast("这里已有建筑");return;}
+      if(!isDug(tx,ty)){toast("先挖开这格");return;}
+      if(stock<cost){toast("食物不足（需 "+cost+"）");return;}
+      stock-=cost;granaries.push({ti});
+      toast("🏗 粮仓建成——食物上限 +"+CONFIG.GRANARY_CAP+"（当前 "+capNow()+"）");sfx("dig");
     }else if(tool==="egg"||tool==="eggs"||tool==="eggr"||tool==="eggt"){
       const caste={egg:"worker",eggs:"soldier",eggr:"ranged",eggt:"tank"}[tool];
       const cost=CASTE_STATS[caste].cost;
@@ -1441,6 +1455,9 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       holes.push(h);digShaft(h);flowClear();flowClear();carveClear(h.sx,h.sy);
       toast("新入口打通（地下 x="+tx+" → 地表）");
     }else if(tool==="demolish"){
+      const gi2=granaries.findIndex(g2=>g2.ti===ti);
+      if(gi2>=0){granaries.splice(gi2,1);stock+=CONFIG.GRANARY_REFUND;
+        toast("粮仓已拆除（返 "+CONFIG.GRANARY_REFUND+"）——上限 -"+CONFIG.GRANARY_CAP);return;}
       const ni=nurseries.findIndex(n=>n.ti===ti);
       if(ni>=0){
         const n=nurseries[ni];
@@ -2129,6 +2146,17 @@ function renderUnder(c){
       }
     }
   }
+  // 粮仓格（v3.3：堆叠谷囤图形+储量字）
+  for(const g2 of granaries){
+    const x=(g2.ti%GW)*CONFIG.TILE,y=((g2.ti/GW)|0)*CONFIG.TILE;
+    c.fillStyle="#3a2c1a";c.fillRect(x+3,y+3,CONFIG.TILE-6,CONFIG.TILE-6);
+    c.strokeStyle="rgba(232,217,184,.5)";c.lineWidth=1;c.strokeRect(x+3,y+3,CONFIG.TILE-6,CONFIG.TILE-6);
+    c.fillStyle="#c9a04a";
+    c.beginPath();c.moveTo(x+5,y+12);c.lineTo(x+CONFIG.TILE-5,y+12);c.lineTo(x+CONFIG.TILE-8,y+5);c.lineTo(x+8,y+5);c.closePath();c.fill();
+    c.fillStyle="#8a6a34";c.fillRect(x+7,y+12,CONFIG.TILE-14,CONFIG.TILE-15);
+    c.fillStyle="#e8d9b8";c.font="9px sans-serif";c.textAlign="center";
+    c.fillText("+"+CONFIG.GRANARY_CAP,x+CONFIG.TILE/2,y+CONFIG.TILE-4);
+  }
   // 地下食物堆（堆粒数随储量缩放——残量滴灌源一眼可辨"基本采空"；王浆节点紫粉粒 v1.25；v1.27 预索引查表）
   for(const src of sources){
     const i=gi(src.x,src.y);
@@ -2303,11 +2331,11 @@ function updateHUD(dt){
   const cnt=[0,0,0];for(const a of ants)cnt[a.group]++;
   const cyc=CONFIG.DAY_LEN+CONFIG.NIGHT_LEN,ph=dayT%cyc;
   const dayIcon=isNight()?"🌙夜":"☀昼", remain=Math.ceil((isNight()?cyc-ph:CONFIG.DAY_LEN-ph));
-  hud.innerHTML=`${LEVEL.id!=="free"?`<span style="color:#ffd9a0">${LEVEL.name}</span>`:""}${levelObjective()} ｜ ${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
+  hud.innerHTML=`${LEVEL.id!=="free"?`<span style="color:#ffd9a0">${LEVEL.name}</span>`:""}${levelObjective()} ｜ ${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b><small>/${capNow()}</small> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
     `收入 <b>${R.toFixed(2)}</b>/s ｜ 击杀 <b>${kills}</b> ｜ 各队 <b>${cnt[0]}</b>/<b>${cnt[1]}</b>/<b>${cnt[2]}</b><br>`+
     `用时 <b>${(simTime/60|0)}:${String(simTime%60|0).padStart(2,"0")}</b> ｜ ${view===L_UNDER?"地下":"地表"} ｜ 当前 ${groups[curGroup].name}·${({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule]}`+
     `${queenCd>0?` ｜ <span class="warn">产卵冷却 ${queenCd.toFixed(0)}s</span>`:""}`+
-    `${stock<=0.001?` ｜ <span class="warn">⚠ 断粮</span>`:""}${stock>=CONFIG.STOCK_CAP?` ｜ <span class="warn">满仓·该投资了</span>`:""}`+
+    `${stock<=0.001?` ｜ <span class="warn">⚠ 断粮</span>`:""}${stock>=capNow()?` ｜ <span class="warn">满仓·建粮仓扩容</span>`:""}`+
     `${titan&&titan.alive?` ｜ <span class="warn">🐸 巨兽在场${titan.eatT>0?"·进食窗口！":""}</span>`:""}`+
     `${queen&&queen.hp<queen.maxhp*0.5?` ｜ <span class="warn">⚠ 蚁后受击 ${Math.ceil(queen.hp)}/${queen.maxhp}</span>`:""}`;
   if(devMode){
@@ -2460,7 +2488,7 @@ function initGame(seed,key,levelId){
   stock=CONFIG.START_FOOD;stockShown=CONFIG.START_FOOD;queenCd=0;collected=0;collectedS=0;dugCount=0;rescues=0;
   starvingNow=false;dayT=0;kills=0;peakPop=CONFIG.START_WORKERS;waveNo=0;simTime=0;
   waveTimer=DIFF.wave;fogTimer=0;hiveTick=0;nightSeen=false;endlessScale=1.0;sfxWave=0;
-  ants=[];broods=[];nurseries=[];markers=[];enemies=[];predators=[];corpses=[];dust=[];projectiles=[];
+  ants=[];broods=[];nurseries=[];markers=[];enemies=[];predators=[];corpses=[];dust=[];projectiles=[];granaries=[];
   jelly=0;jellyEarned=0;meta.jellySnap=0;halfMark=0;jellyLevels={worker:1,soldier:1,ranged:1,tank:1};
   jellyUpgrades={worker:null,soldier:null,ranged:null,tank:null};
   projFired=0;stunSeen=0;titanEatSeen=0;
@@ -2734,6 +2762,7 @@ function saveGame(){
       holes:holes.map(h=>({ux:h.ux,uy:h.uy,sx:h.sx,sy:h.sy})),
       enemies:enemies.map(e=>({c:e.caste,x:+e.x.toFixed(2),y:+e.y.toFixed(2),l:e.layer,s:e.state,hp:e.hp})),
       nest:{hp:Math.ceil(enemyNest.hp),food:Math.floor(enemyNest.food),dead:enemyNest.dead},
+      granaries:granaries.map(g2=>g2.ti),
       // v1.29 战神反馈「继续蚁巢后上次挖掉的没有了」：挖掘图/源储量/探索迷雾一并入档（RLE 压缩）
       map:rleEnc(tile),foodU:rleEnc(Array.from(tileFood,v=>Math.round(v))),
       exp:rleEnc(explored.map(e=>e?1:0)),foodS:rleEnc(Array.from(sTileFood,v=>Math.round(v))),
@@ -2775,6 +2804,7 @@ function continueGame(){
   if(d.map){tile.set(rleDec(d.map,tile.length));tileFood.set(rleDec(d.foodU,tileFood.length));dirtyMap=true;}
   if(d.exp){explored.set(rleDec(d.exp,explored.length));sTileFood.set(rleDec(d.foodS,sTileFood.length));dirtySur=true;}
   if(d.dugCount!==undefined){dugCount=d.dugCount;collected=d.collected;collectedS=d.collectedS;rescues=d.rescues;}
+  if(d.granaries){granaries=d.granaries.map(ti=>({ti}));} // v3.3 粮仓恢复
   document.querySelectorAll(".gsel").forEach(x=>x.classList.toggle("active",+x.dataset.g===curGroup));
   document.getElementById("btn-rule").textContent="规则："+({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule];
   toast("已继续上次蚁巢（用时 "+(simTime/60|0)+" 分钟）");
