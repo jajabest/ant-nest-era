@@ -158,7 +158,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.0（M6 蚁种扩展）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.1（敌蚁流场+解锁余额实时）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -660,6 +660,25 @@ function nearestBrood(){ // 最近的有卵育婴格
   for(const b of broods){const x=b.ti%GW+0.5,y=(b.ti/GW|0)+0.5;const d=dist2(NEST.x,NEST.y,x,y);if(d<bd){bd=d;best={ti:b.ti,x,y};}}
   return best;
 }
+function moveFlowEnemy(e,dt,tx,ty){ // v4.1 敌蚁地下流场寻路（根治进巢后直线撞墙卡死）
+  const cur=gi(clamp(e.x|0,0,GW-1),clamp(e.y|0,0,GH-1)), to=gi(clamp(tx|0,0,GW-1),clamp(ty|0,0,GH-1));
+  const flow=flowField(to);
+  let best=-1,bd=flow[cur];
+  if(bd>=0){
+    for(const d of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=clamp((e.x|0)+d[0],0,GW-1),ny=clamp((e.y|0)+d[1],0,GH-1);
+      if(inGrid(nx,ny)&&isDug(nx,ny)){const dv=flow[gi(nx,ny)];if(dv>=0&&dv<bd){bd=dv;best=gi(nx,ny);}}
+    }
+  }
+  if(best>=0){
+    const ang=Math.atan2((best/GW|0)+0.5-e.y,best%GW+0.5-e.x);
+    let da=ang-e.ang;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;
+    e.ang+=clamp(da,-dt*5,dt*5);
+    const sp=2*dt;
+    const mx=e.x+Math.cos(e.ang)*sp,my=e.y+Math.sin(e.ang)*sp;
+    if(isDug(mx|0,my|0)){e.x=mx;e.y=my;e.stuck=Math.max(0,e.stuck-dt);}
+  }else steerEnemy(e,dt,tx,ty,false); // 场不可达：直线兜底
+}
 function enemyRaiderStep(e,dt){ // 掠蚁：地表→洞口→下井→抢卵→携卵逃离（出图才算真损失）
   if(e.phase2==="flee"){ // 携卵逃跑：奔最近洞口并上地表消失
     if(e.layer===L_UNDER){
@@ -736,7 +755,7 @@ function enemyStep(e,dt){
       tx=t.x;ty=t.y;
       if(dist2(e.x,e.y,queen.x,queen.y)<1.6){tryAttack(e,queen,dt);return;}
       if(a&&dist2(e.x,e.y,a.x,a.y)<1.4){tryAttack(e,a,dt);return;}
-      steerEnemy(e,dt,tx,ty,false);
+      moveFlowEnemy(e,dt,tx,ty); // v4.1 流场寻路：沿玩家挖好的隧道拐弯进犯（原直线撞墙卡死）
       if(e.stuck>6){ // 卡死兜底：送回竖井顶重新下爬（v1.13：不再瞬移竖井底绕过防御）
         let h=null,bd=1e9;for(const o of holes){const d=dist2(e.x,e.y,o.ux+0.5,o.uy+0.5);if(d<bd){bd=d;h=o;}}
         e.x=h.ux+0.5;e.y=2.6;e.shaft=h;e.stuck=0;return;
@@ -2961,13 +2980,14 @@ function updateUnlockUI(){ // v4.0 工具条锁定态（6 兵种通用）
 let unlockConfirm=null;
 function tryUnlock(cs){ // 两段式确认解锁（花跨局王浆）
   const cost=UNLOCK_COST[cs];
-  if(meta.jellyTotal<cost){toast("跨局王浆不足（需 "+cost+"，当前 "+(meta.jellyTotal|0)+"）——多打几局攒王浆");return;}
+  meta.jellyTotal+=jellyEarned-(meta.jellySnap||0);meta.jellySnap=jellyEarned; // v4.1 实时同步本局增量（原 20s 延迟入账→解锁时余额显示为旧值=「不扣王浆」体感）
+  if(meta.jellyTotal<cost){toast("跨局王浆不足（需 "+cost+"，当前余额 "+(meta.jellyTotal|0)+"🍯）——局内获取的王浆实时计入");return;}
   if(unlockConfirm!==cs){unlockConfirm=cs;setTimeout(()=>{if(unlockConfirm===cs)unlockConfirm=null;},2500);
-    toast("再点一次确认：花 "+cost+" 🍯 跨局王浆永久解锁"+CASTE_CN[cs]);return;}
+    toast("再点一次确认：花 "+cost+" 🍯 跨局王浆永久解锁"+CASTE_CN[cs]+"（当前余额 "+(meta.jellyTotal|0)+"🍯）");return;}
   unlockConfirm=null;
   meta.jellyTotal-=cost;meta.unlocks[cs]=true;metaSave();
   updateUnlockUI();
-  toast("🍯 "+CASTE_CN[cs]+" 已永久解锁！（跨局生效）");
+  toast("🍯 "+CASTE_CN[cs]+" 已永久解锁！剩余跨局王浆 "+(meta.jellyTotal|0)+"🍯");
 }
 function metaLine(){
   const el=document.getElementById("meta-line");if(!el)return;
