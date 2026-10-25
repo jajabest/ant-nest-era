@@ -100,6 +100,10 @@
   <button class="btn" data-tool="eggs">🪖<small>兵蚁卵 25</small></button>
   <button class="btn" id="tb-eggr" data-tool="eggr">🧪<small>远程卵 30</small></button>
   <button class="btn" id="tb-eggt" data-tool="eggt">🛡<small>坦克卵 40</small></button>
+  <button class="btn" id="tb-eggm" data-tool="eggmed">🌿<small>疗伤卵 18</small></button>
+  <button class="btn" id="tb-eggj" data-tool="eggjaw">🦗<small>跳颌卵 32</small></button>
+  <button class="btn" id="tb-eggb" data-tool="eggboom">💥<small>爆蚁卵 22</small></button>
+  <button class="btn" id="tb-eggsw" data-tool="eggsw">🐜<small>群蚁卵 4</small></button>
   <button class="btn" data-tool="hole">🕳<small>新入口 30</small></button>
   <button class="btn" data-tool="demolish">❌<small>拆除</small></button>
   <button class="btn" data-tool="transfer">🔀<small>调蚁</small></button>
@@ -154,7 +158,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v3.3（粮仓扩容）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.0（M6 蚁种扩展）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -251,7 +255,7 @@ const CONFIG = {
   JELLY_TITAN: 2,               // 杀巨兽王浆（§5）
   JELLY_PRED: 1, // [PH] 击杀天敌（蜘蛛/甲虫）+1（v3.2 还原）                // [PH] 击杀天敌（蜘蛛/甲虫）+1——v1.21 战神反馈「解锁新兵种不能只要一两个」：王浆总量不够买齐 4 兵种分支（7 枚），加可猎杀渠道（天敌可重生 300s，非无限刷）
   JELLY_DAY: 1, // 存活每半个昼夜天 +1（v3.2 还原）                 // 存活每半个昼夜天 +1（v1.20 战神反馈「得不到王浆」节奏改判：原 1 天 1 枚=首枚 8 分钟，升级面板前期纯摆设；昼夜交替各 1 枚→首枚 4 分钟、之后每 4 分钟一枚，rationale 入 §5）
-  JELLY_COST: {worker:1, soldier:2, ranged:2, tank:3}, // [PH] 升级单价（§5 1-3 区间内：特技强度定价）
+  JELLY_COST: {worker:1, soldier:2, ranged:2, tank:3, medic:3, jawjumper:4, boomer:3, swarmling:2}, // [PH] 升级单价（§5 1-3 区间内：特技强度定价）
   WORKER_CARRY_UP: 3,           // [PH] 勤劳型载量 +
   LOAD_FAST: 0.5,               // [PH] 勤劳型采集动作缩减 s
   EVADE: 0.35,                  // [PH] 警觉型闪避率
@@ -291,6 +295,10 @@ const CONFIG = {
   ENDLESS_SCALE: 1.25,          // §5 无尽阶梯：每波敌群 +25%
   ENDLESS_WAVE_K: 0.85,         // [PH] 继续沙盒后波间隔缩短系数
   // M3-5 巨兽（美洲牛蛙型 Titan）[PH]：禁血牛堆——机制解=进食爆发窗（§9-C⑥ 调研修正）
+  MEDIC_RECOVER: 30,            // [PH] 疗养时长（伤员回巢后满血归队）
+  MEDIC_CARRY_SPEED: 0.8,       // [PH] 抬运减速系数
+  JAW_CD: 8, JAW_HEAL: 0.2, JAW_FOES: 3, // [PH] 跳颌：后跳冷却/回血比/围攻触发数
+  BOOM_DMG: 60, BOOM_R: 2.5,    // [PH] 爆蚁：爆炸伤害/半径（敌我皆伤）
   MOLE_HP: 400, MOLE_ATK: 8, MOLE_CD: 1.2, MOLE_SPEED: 0.5, MOLE_DIG: 2, // [PH] 鼹蟋蟀（第一章终局）：厚血+反挖土逼近
   ERAIDER_HP: 60, ERAIDER_ATK: 4, ERAIDER_CD: 1.2, ERAIDER_SPEED: 1.6, // [PH] 掠蚁（第二章偷卵者）：脆、快、不恋战
   ERAIDER_GUARD_HP: 200, ERAIDER_GUARD_ATK: 8, ERAIDER_GUARD_CD: 1.4, ERAIDER_GUARD_SPEED: 1.2, // [PH] 掠蚁兵（肉盾拖住）
@@ -553,12 +561,17 @@ const CASTE_STATS={
   ranged:{hp:48,atk:14,cd:1.4,spd:0.9,cost:30,food:0,range:3.2},
   tank:{hp:200,atk:6,cd:1,spd:0.55,cost:40,food:0},
   eraider:{hp:60,atk:4,cd:1.2,spd:1.6,cost:0,food:0,steal:true},
-  eraiderGuard:{hp:200,atk:8,cd:1.4,spd:1.2,cost:0,food:0,block:true},worker: {hp:CONFIG.WORKER_HP,  atk:CONFIG.WORKER_ATK,  cd:CONFIG.WORKER_CD,  spd:1,    cost:CONFIG.EGG_COST,     range:CONFIG.ATK_RANGE},
+  eraiderGuard:{hp:200,atk:8,cd:1.4,spd:1.2,cost:0,food:0,block:true},
+  medic:{hp:30,atk:2,cd:1.2,spd:1.2,cost:18,food:0},
+  jawjumper:{hp:35,atk:12,cd:0.9,spd:1.4,cost:32,food:0},
+  boomer:{hp:12,atk:0,cd:1,spd:1.1,cost:22,food:0},
+  swarmling:{hp:8,atk:3,cd:0.7,spd:1.5,cost:4,food:0,small:true},
+  earmy:{hp:12,atk:4,cd:0.8,spd:1.5,cost:0,food:0},worker: {hp:CONFIG.WORKER_HP,  atk:CONFIG.WORKER_ATK,  cd:CONFIG.WORKER_CD,  spd:1,    cost:CONFIG.EGG_COST,     range:CONFIG.ATK_RANGE},
   soldier:{hp:CONFIG.SOLDIER_HP, atk:CONFIG.SOLDIER_ATK, cd:CONFIG.SOLDIER_CD, spd:CONFIG.SOLDIER_SPD, cost:CONFIG.SOLDIER_COST, range:CONFIG.ATK_RANGE},
   ranged: {hp:CONFIG.RANGED_HP,  atk:CONFIG.RANGED_ATK,  cd:CONFIG.RANGED_CD,  spd:CONFIG.RANGED_SPD,  cost:CONFIG.RANGED_COST,  range:CONFIG.RANGED_RANGE},
   tank:   {hp:CONFIG.TANK_HP,    atk:CONFIG.TANK_ATK,    cd:CONFIG.TANK_CD,    spd:CONFIG.TANK_SPD,    cost:CONFIG.TANK_COST,    range:CONFIG.ATK_RANGE},
 };
-const CASTE_CN={worker:"工蚁",soldier:"兵蚁",ranged:"远程蚁",tank:"坦克蚁"};
+const CASTE_CN={worker:"工蚁",soldier:"兵蚁",ranged:"远程蚁",tank:"坦克蚁",medic:"疗伤蚁",jawjumper:"跳颌蚁",boomer:"爆蚁",swarmling:"群蚁"};
 function statOf(a,key){ // 升级 buff 统一出口（v1.25：兵种等级系数+3 级分支强化也走这里）
   const s=CASTE_STATS[a.caste], u=jellyUpgrades[a.caste], lv=jellyLevels[a.caste]||1;
   const lvK=1+(lv-1)*CONFIG.LV_GAIN, lv3=lv>=3; // 每级 HP/ATK +18%；3 级解锁分支强化
@@ -590,13 +603,14 @@ function stunChance(){return CONFIG.TANK_STUN_CHANCE*(jellyLevels.tank>=3?CONFIG
 
 function addAnt(x,y,caste,group,layer){
   ants.push({x,y,ang:rng()*6.283,wa:0,carry:0,state:"idle",tgt:null,stuck:0,timer:0,phase:rng()*6.283,
-    layer:layer||L_UNDER,caste,group:group||0,rule:groups[group||0].rule,
+    layer:(layer===undefined)?L_UNDER:layer,caste,group:group||0,rule:groups[group||0].rule,
     hp:statOf({caste},"hp"),maxhp:statOf({caste},"maxhp"),
-    atkCd:0,tgtE:null,lastHitT:-99});
+    atkCd:0,tgtE:null,lastHitT:-99,alive:true,jawCd:0}); // M6：alive 幂等保护/jawCd 跳颌冷却初始
+  return ants[ants.length-1]; // M6：测试/疗伤链需要实体引用
 }
 function addEnemy(x,y,caste,layer){
   const sol=caste==="esoldier", er=caste==="eraider", erg=caste==="eraiderGuard";
-  enemies.push({x,y,ang:rng()*6.283,state:(sol||erg)?"patrol":"forage",layer:layer||L_OVER,
+  enemies.push({x,y,ang:rng()*6.283,state:(sol||erg)?"patrol":"forage",layer:(layer===undefined)?L_OVER:layer,
     caste,carry:0,tgt:null,stuck:0,timer:0,phase:rng()*6.283,stunT:0,
     hp:er?CONFIG.ERAIDER_HP:erg?CONFIG.ERAIDER_GUARD_HP:sol?CONFIG.ESOLDIER_HP:CONFIG.EWORKER_HP,
     maxhp:er?CONFIG.ERAIDER_HP:erg?CONFIG.ERAIDER_GUARD_HP:sol?CONFIG.ESOLDIER_HP:CONFIG.EWORKER_HP,
@@ -716,7 +730,7 @@ function enemyStep(e,dt){
         if(e.y<e.shaft.uy-0.5){e.y+=CONFIG.SHAFT_CLIMB*dt;e.ang=Math.PI/2;return;}
         e.y=e.shaft.uy+0.5;e.shaft=null;
       }
-      const cand=ants.filter(a=>a.layer===L_UNDER);
+      const cand=ants.filter(a=>a.layer===L_UNDER&&a.state!=="carried"&&a.state!=="recover"); // M6 被抬/疗养中不索敌
       const a=pickTaunt(cand,e.x,e.y)||nearestOf(cand,e.x,e.y,4);
       const t=a||queen;
       tx=t.x;ty=t.y;
@@ -822,6 +836,18 @@ function onDeath(u,killer){
     if(u.state==="dig")releaseDig(u.tgt); // 防 claim 泄漏
     ants.splice(i,1);pushCorpse(u.x,u.y,u.layer);
     sfx("die");
+    if(u.state==="carried"&&u.carriedBy){u.carriedBy.carryAnt=null;u.carriedBy.state="idle";}
+    if(u.caste==="medic"&&u.carryAnt){u.carryAnt.state="idle";u.carryAnt.carriedBy=null;}
+    if(u.caste==="boomer"&&jellyUpgrades.boomer==="yanbao"){ // M6 延爆：1.5s 后引爆
+      delayedBooms.push({x:u.x,y:u.y,layer:u.layer,t:1.5});
+    }else if(u.caste==="boomer"){
+      const R=jellyUpgrades.boomer==="mengbao"?3:CONFIG.BOOM_R;
+      const DMG=jellyUpgrades.boomer==="mengbao"?90:CONFIG.BOOM_DMG;
+      pushAlert(u.x,u.y,u.layer,"💥","#ff9a4e",1.2);
+      for(const e2 of enemies)if(e2.layer===u.layer&&dist2(e2.x,e2.y,u.x,u.y)<R*R){e2.hp-=DMG;if(e2.hp<=0)onDeath(e2,u);}
+      for(const a2 of ants)if(a2!==u&&a2.layer===u.layer&&dist2(a2.x,a2.y,u.x,u.y)<R*R){a2.hp-=DMG;a2.lastHitT=simTime;if(a2.hp<=0)onDeath(a2,u);}
+      for(const p2 of predators)if(p2.alive&&p2.layer===u.layer&&dist2(p2.x,p2.y,u.x,u.y)<R*R){p2.hp-=DMG;if(p2.hp<=0)onDeath(p2,u);}
+    }
     // v1.24 兵籍替补：绑定蚁阵亡 → 其格自动扣 60% 费走 15s 快速替补（钱不够挂起，补款自动开孵）
     if(u.homeTi!==undefined){
       const nn=nurseries.find(n=>n.ti===u.homeTi);
@@ -864,6 +890,13 @@ function enemyHiveTick(dt){
 }
 function triggerWave(){
   sfx("alarm");
+  if(diffKey==="hard"&&waveNo>=3&&waveNo%3===0&&LEVEL.id==="free"){
+    const base=enemyNest;
+    for(let i=0;i<40;i++)addEnemy(base.x+(i%6)-3,base.y-(i/6|0)*1.2,"earmy",L_OVER).state="attack";
+    for(const o of holes)pushAlert(o.sx+0.5,o.sy-0.5,L_OVER,"⚠","#ff5a4e",5);
+    toast("🐜🐜 行军蚁大军压境——40 只纵队进犯！（范围伤害是解法）");
+    return;
+  }
   for(const o of holes)pushAlert(o.sx+0.5,o.sy-0.5,L_OVER,"⚠","#ff5a4e",5);
   const force=enemies.filter(e=>e.caste==="esoldier"||(e.caste==="eworker"&&rng()<0.5));
   for(const e of force)e.state="attack";
@@ -1016,6 +1049,37 @@ function predStep(p,dt){
 
 /* ---------------- 我方蚂蚁 AI（M1 状态机 + 双层 + 战斗规则） ---------------- */
 function antStep(a,dt){
+  // M6 状态机前置：被抬运（位置由疗伤蚁同步，不自主行动）
+  if(a.state==="carried"){if(!a.carriedBy||a.carriedBy.alive===false){a.state="idle";a.carriedBy=null;}return;}
+  // M6 疗养：倒计时满血归队
+  if(a.state==="recover"){a.timer-=dt;if(a.timer<=0){a.hp=a.maxhp;a.state="idle";a.timer=0;}return;}
+  // M6 疗伤蚁专属行为
+  if(a.caste==="medic"){medicStep(a,dt);return;}
+  // M6 跳颌蚁：被围攻触发后跳脱战回血
+  if(a.caste==="jawjumper"){
+    if(a.jawCd>0)a.jawCd-=dt;
+    if(a.jawCd<=0&&a.hp<a.maxhp*0.5){
+      const foes=enemies.filter(e2=>e2.layer===a.layer&&dist2(e2.x,e2.y,a.x,a.y)<9);
+      if(foes.length>=CONFIG.JAW_FOES){
+        const nf=nearestOf(foes,a.x,a.y,99);
+        const base=Math.atan2(a.y-nf.y,a.x-nf.x);
+        // v4.0 扇形扫描：后跳方向可能全是土墙（隧道）——8 向 × 3 档距离找最近可跳格
+        let jumped=false;
+        outer:
+        for(const dist of [4,3,2]){
+          for(const da of [0,0.6,-0.6,1.2,-1.2,1.8,-1.8,2.4,-2.4]){
+            const jx=a.x+Math.cos(base+da)*dist, jy=a.y+Math.sin(base+da)*dist;
+            if(inGrid(jx|0,jy|0)&&isDug(jx|0,jy|0)){
+              a.x=jx;a.y=jy;a.hp=Math.min(a.maxhp,a.hp+a.maxhp*(jellyUpgrades.jawjumper==="qiangE"?0.35:CONFIG.JAW_HEAL));
+              a.jawCd=jellyUpgrades.jawjumper==="tansu"?5:CONFIG.JAW_CD;
+              spawnDust(a.x|0,a.y|0,a.layer);jumped=true;break outer;
+            }
+          }
+        }
+        if(jumped)return;
+      }
+    }
+  }
   a.phase+=dt*10;a.atkCd=Math.max(0,a.atkCd-dt);
   a.rule=groups[a.group].rule; // 组规则实时下发（M2-8）
   if(a.caste==="tank"&&jellyUpgrades.tank==="taunt"&&a.hp<a.maxhp)a.hp=Math.min(a.maxhp,a.hp+CONFIG.TANK_REGEN*dt); // M3-2 嘲讽型转火回血
@@ -1081,6 +1145,40 @@ function fightStep(a,e,dt){
     return;
   }
   steerAnt(a,dt,e.x,e.y,0,false);
+}
+function medicStep(a,dt){ // M6 疗伤蚁：找濒死→抬起→运回蚁后室→疗养
+  if(a.carryAnt){
+    const c=a.carryAnt;
+    if(c.hp<=0||c.state!=="carried"){a.carryAnt=null;a.state="idle";return;}
+    c.x=a.x;c.y=a.y;
+    const spd=CONFIG.ANT_SPEED*statOf(a,"spd")*(jellyUpgrades.medic==="jiji"?1.5:CONFIG.MEDIC_CARRY_SPEED);
+    steerAntRaw(a,dt,NEST.x,NEST.y,spd);
+    if(dist2(a.x,a.y,NEST.x,NEST.y)<2.5){
+      c.state="recover";c.timer=CONFIG.MEDIC_RECOVER;c.carriedBy=null;
+      a.carryAnt=null;a.state="idle";a.timer=0;
+      toast(CASTE_CN[c.caste]+"被抬回巢疗养（"+CONFIG.MEDIC_RECOVER+"s 后归队）");
+    }
+    return;
+  }
+  let best=null,bd=1e9;
+  for(const w of ants){
+    if(w===a||w.state==="carried"||w.state==="recover"||w.caste==="medic")continue;
+    if(w.hp>=w.maxhp*0.25||w.hp<=0)continue;
+    if(simTime-w.lastHitT<5)continue;
+    if(w.layer!==a.layer)continue;
+    const d=dist2(a.x,a.y,w.x,w.y);if(d<bd){bd=d;best=w;}
+  }
+  if(best){
+    if(bd<1.2){a.carryAnt=best;best.state="carried";best.carriedBy=a;best.tgtE=null;return;}
+    steerAnt(a,dt,best.x,best.y,0,false);return;
+  }
+  moveSteer(a,dt,NEST.x,NEST.y,7);
+}
+function steerAntRaw(a,dt,tx,ty,sp){
+  const ang=Math.atan2(ty-a.y,tx-a.x);
+  a.ang=ang;
+  const nx=a.x+Math.cos(ang)*sp*dt,ny=a.y+Math.sin(ang)*sp*dt;
+  if(a.layer===L_OVER||isDug(nx|0,ny|0)){a.x=nx;a.y=ny;}
 }
 function antStepUnder(a,dt){
   const f=phU;
@@ -1432,8 +1530,8 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       if(stock<cost){toast("食物不足（需 "+cost+"）");return;}
       stock-=cost;granaries.push({ti});
       toast("🏗 粮仓建成——食物上限 +"+CONFIG.GRANARY_CAP+"（当前 "+capNow()+"）");sfx("dig");
-    }else if(tool==="egg"||tool==="eggs"||tool==="eggr"||tool==="eggt"){
-      const caste={egg:"worker",eggs:"soldier",eggr:"ranged",eggt:"tank"}[tool];
+    }else if(tool==="egg"||tool==="eggs"||tool==="eggr"||tool==="eggt"||tool==="eggmed"||tool==="eggjaw"||tool==="eggboom"||tool==="eggsw"){
+      const caste={egg:"worker",eggs:"soldier",eggr:"ranged",eggt:"tank",eggmed:"medic",eggjaw:"jawjumper",eggboom:"boomer",eggsw:"swarmling"}[tool];
       const cost=CASTE_STATS[caste].cost;
       if(caste!=="worker"&&caste!=="soldier"&&!meta.unlocks[caste]){toast(CASTE_CN[caste]+" 尚未解锁（🔒"+UNLOCK_COST[caste]+"🍯 跨局王浆）");return;}
       if(CAPS_UL&&CAPS_UL.length&&!CAPS_UL.includes(caste)){toast("本章尚未解锁"+CASTE_CN[caste]+"（后续章节开放）");return;}
@@ -1443,8 +1541,9 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       if(queenCd>0){toast("蚁后产卵冷却中 "+queenCd.toFixed(1)+"s");return;}
       if(stock<cost){toast("食物不足（需 "+cost+"）");return;}
       if(popCount()>=nurseries.length){toast("育婴格已满，先造格（人口=育婴格数）");return;}
-      stock-=cost;queenCd=CONFIG.LAY_COOLDOWN;
-      broods.push({ti,stage:0,timer:CONFIG.BROOD_EGG,caste,group:curGroup});
+      stock-=cost*(caste==="swarmling"?3:1);queenCd=CONFIG.LAY_COOLDOWN;
+      const nEggs=caste==="swarmling"?(jellyUpgrades.swarmling==="fengyong"?4:3):1;
+      for(let i=0;i<nEggs;i++)broods.push({ti,stage:0,timer:CONFIG.BROOD_EGG,caste,group:curGroup});
       toast(CASTE_CN[caste]+"卵 → "+groups[curGroup].name+"（成虫后绑定此格）");
     }else if(tool==="hole"){
       if(!isDug(tx,ty)||isShaft(tx,ty)){toast("竖井入口需建在挖空的地面（将向上整列打通）");return;}
@@ -1591,8 +1690,9 @@ canvas.addEventListener("contextmenu",e=>{
 /* ---------------- UI 绑定 ---------------- */
 document.querySelectorAll("#toolbar .btn[data-tool]").forEach(b=>{
   b.addEventListener("click",()=>{
-    const _t=b.dataset.tool; // v3.0 解锁拦截：未解锁兵种点击=解锁流程（不切工具）
-    if((_t==="eggr"&&!meta.unlocks.ranged)||(_t==="eggt"&&!meta.unlocks.tank)){tryUnlock(_t==="eggr"?"ranged":"tank");return;}
+    const _t=b.dataset.tool;
+    const _cs={eggr:"ranged",eggt:"tank",eggmed:"medic",eggjaw:"jawjumper",eggboom:"boomer",eggsw:"swarmling"}[_t];
+    if(_cs&&!meta.unlocks[_cs]){tryUnlock(_cs);return;}
     document.querySelectorAll("#toolbar .btn[data-tool]").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");tool=b.dataset.tool;
   });
@@ -1770,7 +1870,7 @@ function sfx(name){
 }
 
 /* ---------------- v2.2 事件指示器（原作式感叹号/警告图标：悬浮+脉动，自动过期） ---------------- */
-let alertIcons=[];
+let alertIcons=[];let delayedBooms=[];
 function pushAlert(x,y,layer,text,color,dur){
   alertIcons.push({x,y,layer,text:text||"!",color:color||"#ff5a4e",ttl:dur||3});
 }
@@ -1809,6 +1909,10 @@ function drawAlerts(c,layer){
 /* ---------------- 升级面板（M3-3：王浆 + 分支二选一锁死） ---------------- */
 const jellyEl=document.getElementById("jellypanel");
 const JELLY_BRANCHES={
+  medic:[{id:"jiji",cn:"急救",fx:"抬运速度 +50%"},{id:"jiagu",cn:"加固",fx:"抬运中的伤员不受攻击"}],
+  jawjumper:[{id:"qiangE",cn:"强颚",fx:"后跳回血升至 35%"},{id:"tansu",cn:"弹速",fx:"后跳冷却 8s→5s"}],
+  boomer:[{id:"mengbao",cn:"猛爆",fx:"爆炸伤害 90、半径 3"},{id:"yanbao",cn:"延爆",fx:"死亡后延迟 1.5s 引爆"}],
+  swarmling:[{id:"fengyong",cn:"蜂拥",fx:"同格 3 卵→4 卵"},{id:"jizou",cn:"疾走",fx:"移速 1.5→2.0"}],
   worker:[{id:"indust",cn:"勤劳型",fx:"载量 +"+CONFIG.WORKER_CARRY_UP+"，采集动作 -"+CONFIG.LOAD_FAST+"s"},
           {id:"alert", cn:"警觉型",fx:"闪避 "+Math.round(CONFIG.EVADE*100)+"% 物理伤害"}],
   soldier:[{id:"wall",cn:"坚壁型",fx:"受到物理伤害 -"+Math.round(CONFIG.SOLDIER_ARMOR*100)+"%"},
@@ -1829,7 +1933,7 @@ function refreshCaste(cs){ // v1.25 升级后存量蚁 HP 等比放大（升级�
 function renderJelly(){
   document.getElementById("jelly-sub").textContent="王浆储备："+jelly+"（本局共获得 "+jellyEarned+"）｜ 等级成长与分支共用王浆";
   const list=document.getElementById("jelly-list");list.innerHTML="";
-  for(const cs of ["worker","soldier","ranged","tank"]){
+  for(const cs of ["worker","soldier","ranged","tank","medic","jawjumper","boomer","swarmling"]){
     const row=document.createElement("div");
     row.style.cssText="background:rgba(16,12,8,.6);border:1px solid rgba(232,217,184,.15);border-radius:10px;padding:9px";
     const lv=jellyLevels[cs]||1;
@@ -1990,7 +2094,9 @@ function drawPheromones(f,img,cv){
   cv.getContext("2d").putImageData(img,0,0);
 }
 const GRING=["#8a5410","#2f8a54","#3a6f9a"]; // 队色环（与标记色一致）：1队琥珀/2队绿/3队蓝
-function drawAntBody(c,a,bodyCol,bellyCol,ring){
+function drawAntBody(c,a,bodyCol,bellyCol,ring,scale){
+  scale=scale||1;
+  c.save();c.translate(a.x*CONFIG.TILE,a.y*CONFIG.TILE);c.rotate(a.ang);c.scale(scale,scale);c.translate(-a.x*CONFIG.TILE,-a.y*CONFIG.TILE);
   c.save();c.translate(a.x*CONFIG.TILE,a.y*CONFIG.TILE);c.rotate(a.ang);
   // M3 兵种体型/体色：兵蚁 1.35 / 坦克 1.7 宽厚 / 远程 1.1 苗条绿腹（蚁酸）
   const big=a.caste==="esoldier"?1.35:a.caste==="soldier"?1.35:a.caste==="tank"?1.7:a.caste==="ranged"?1.1:1;
@@ -2026,6 +2132,7 @@ function drawAntBody(c,a,bodyCol,bellyCol,ring){
     c.fillStyle="rgba(0,0,0,.5)";c.fillRect(a.x*CONFIG.TILE-w/2,a.y*CONFIG.TILE-11,w,2.5);
     c.fillStyle=p>0.5?"#7fe07f":"#ff6a4e";c.fillRect(a.x*CONFIG.TILE-w/2,a.y*CONFIG.TILE-11,w*p,2.5);
   }
+  c.restore();
 }
 function drawQueenBody(c,q,queenCol,bellyCol,scale){
   c.save();c.translate(q.x*CONFIG.TILE,q.y*CONFIG.TILE);
@@ -2214,10 +2321,18 @@ function renderUnder(c){
   }
   // 蚂蚁（地下）——蚁身色环=队伍
   for(const a of ants){if(a.layer!==L_UNDER)continue;
-    drawAntBody(c,a,"#221812","#d98e2b",GRING[a.group]);}
+    if(a.state==="carried")return;
+    const col={medic:["#1c2a14","#8fc255"],jawjumper:["#221812","#c8a84e"],boomer:["#2a1a08","#ffb45e"],swarmling:["#221812","#b89a6a"]}[a.caste];
+    const sc=a.caste==="swarmling"?0.6:1;
+    if(col)drawAntBody(c,a,col[0],col[1],GRING[a.group],sc);
+    else drawAntBody(c,a,"#221812","#d98e2b",GRING[a.group]);
+    if(a.caste==="medic"){c.fillStyle="#8fc255";c.font="bold 8px sans-serif";c.textAlign="center";c.fillText("+",a.x*CONFIG.TILE,a.y*CONFIG.TILE-8);}
+    if(a.caste==="medic"&&a.carryAnt){c.fillStyle="#ffd9a0";c.font="8px sans-serif";c.fillText("抬",a.x*CONFIG.TILE,a.y*CONFIG.TILE+14);}
+  }
   // 敌蚁（地下来袭）
   for(const e of enemies){if(e.layer!==L_UNDER)continue;
-    drawAntBody(c,e,"#1c1010","#8a2f1e","#c04a30");}
+    const ec=e.caste==="eraider"?["#241010","#d9544e"]:e.caste==="eraiderGuard"?["#181008","#a83a2e"]:e.caste==="earmy"?["#141010","#8a5a2e"]:["#1c1010","#8a2f1e"];
+    drawAntBody(c,e,ec[0],ec[1],"#c04a30",e.caste==="earmy"?0.85:1);}
   if(queen)drawQueenBody(c,queen,"#221812","#e0952f",0.7); // v1.12 战神反馈再缩：基础体 2.4 格 ×0.7 ≈ 1.7 格
   // M3-1 蚁酸弹道（地下：防波来袭时远程蚁在洞内接战）
   for(const p of projectiles){
@@ -2371,6 +2486,13 @@ function update(dt){
   else if(stockShown<stock)stockShown=Math.min(stock,stockShown+1);
   tutTick(dt); // M4-5 新手引导步进
   alertTick(dt); // v2.2 指示器过期
+  for(let i=delayedBooms.length-1;i>=0;i--){const b=delayedBooms[i];b.t-=dt;
+    if(b.t<=0){delayedBooms.splice(i,1);
+      pushAlert(b.x,b.y,b.layer,"💥","#ff9a4e",1.2);
+      for(const e2 of enemies)if(e2.layer===b.layer&&dist2(e2.x,e2.y,b.x,b.y)<CONFIG.BOOM_R*CONFIG.BOOM_R){e2.hp-=CONFIG.BOOM_DMG;if(e2.hp<=0)onDeath(e2,{});}
+      for(const a2 of ants)if(a2.layer===b.layer&&dist2(a2.x,a2.y,b.x,b.y)<CONFIG.BOOM_R*CONFIG.BOOM_R){a2.hp-=CONFIG.BOOM_DMG;a2.lastHitT=simTime;if(a2.hp<=0)onDeath(a2,{});}
+      for(const p2 of predators)if(p2.alive&&p2.layer===b.layer&&dist2(p2.x,p2.y,b.x,b.y)<CONFIG.BOOM_R*CONFIG.BOOM_R){p2.hp-=CONFIG.BOOM_DMG;if(p2.hp<=0)onDeath(p2,{});}
+    }}
   levelTick(dt); // M5 关卡逻辑（房间清出/掠卵波次/胜负）
   levelEggTick(dt); // M5 被抢卵的拾回
   // M3-3 王浆：存活每半个昼夜天 +1（v1.20 节奏改判：入夜/黎明各结算一次，首枚 4 分钟到账）
@@ -2478,7 +2600,7 @@ requestAnimationFrame(loop);
 
 /* ---------------- 开局 / 结算 / 菜单 ---------------- */
 function initGame(seed,key,levelId){
-  if(levelId&&LEVELS[levelId]){LEVEL=LEVELS[levelId];seed=LEVEL.seed||seed;key=LEVEL.diff||"normal";}
+  if(levelId&&LEVELS[levelId]){LEVEL=LEVELS[levelId];seed=LEVEL.seed||seed;key=LEVEL.diff||key;} // key 保留传入值（free 层可指定难度）
   else LEVEL=LEVELS.free;
   const CAP=LEVEL.caps||{};
   CAPS_UL=CAP.unlocks||null; // 关卡兵种白名单（null=按 meta 解锁制）
@@ -2819,19 +2941,21 @@ document.getElementById("btn-continue").addEventListener("click",continueGame);
 
 /* ---------------- M4-2 跨局 meta（战绩独立存储）+ M4-5 新手引导 ---------------- */
 const META_KEY="antnest_meta_v1";
-let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,jellySnap:0,ch1:0,ch2:0,unlocks:{ranged:false,tank:false}};
-const UNLOCK_COST={ranged:3,tank:6}; // v3.2 战神定版：远程 3 / 坦克 6（其余王浆来源保持原值）
+let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,jellySnap:0,ch1:0,ch2:0,unlocks:{ranged:false,tank:false,medic:false,jawjumper:false,boomer:false,swarmling:false}};
+const UNLOCK_COST={ranged:3,tank:6,medic:10,jawjumper:12,boomer:10,swarmling:6}; // v3.2 战神定版：远程 3 / 坦克 6（其余王浆来源保持原值）
 try{const _m=JSON.parse(localStorage.getItem(META_KEY)||"{}");
-  if(_m){if(!_m.unlocks)_m.unlocks={ranged:false,tank:false};
+  if(_m){if(!_m.unlocks)_m.unlocks={ranged:false,tank:false,medic:false,jawjumper:false,boomer:false,swarmling:false};
+    for(const k of ["medic","jawjumper","boomer","swarmling"])if(_m.unlocks[k]===undefined)_m.unlocks[k]=false;
     Object.assign(meta,_m);}}catch(e){}
-if(new URLSearchParams(location.search).get("autotest"))meta.unlocks={ranged:true,tank:true}; // autotest 全解锁（测试依赖远程/坦克步骤）
+if(new URLSearchParams(location.search).get("autotest"))for(const k of ["ranged","tank","medic","jawjumper","boomer","swarmling"])meta.unlocks[k]=true; // autotest 全解锁（测试依赖远程/坦克步骤）
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(meta));}catch(e){}}
-function updateUnlockUI(){ // v3.0 工具条锁定态：未解锁兵种灰化+🔒价签
-  for(const cs of ["ranged","tank"]){
-    const b=document.getElementById("tb-"+(cs==="ranged"?"eggr":"eggt"));if(!b)continue; // id 映射（按钮 id=tb-eggr/eggt）
+const TB_EGG={ranged:["tb-eggr","🧪<small>远程卵 30</small>"],tank:["tb-eggt","🛡<small>坦克卵 40</small>"],medic:["tb-eggm","🌿<small>疗伤卵 18</small>"],jawjumper:["tb-eggj","🦗<small>跳颌卵 32</small>"],boomer:["tb-eggb","💥<small>爆蚁卵 22</small>"],swarmling:["tb-eggsw","🐜<small>群蚁卵 4</small>"]};
+function updateUnlockUI(){ // v4.0 工具条锁定态（6 兵种通用）
+  for(const cs in TB_EGG){
+    const b=document.getElementById(TB_EGG[cs][0]);if(!b)continue;
     const un=meta.unlocks[cs];
     b.style.opacity=un?"1":".45";
-    b.innerHTML=un?(cs==="ranged"?"🧪<small>远程卵 30</small>":"🛡<small>坦克卵 40</small>"):"🔒<small>解锁 "+UNLOCK_COST[cs]+"🍯</small>";
+    b.innerHTML=un?TB_EGG[cs][1]:"🔒<small>解锁 "+UNLOCK_COST[cs]+"🍯</small>";
   }
 }
 let unlockConfirm=null;
