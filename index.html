@@ -97,8 +97,8 @@
   <button class="btn" data-tool="nursery">🧱<small>育婴格 15</small></button>
   <button class="btn" data-tool="egg">🥚<small>工蚁卵 10</small></button>
   <button class="btn" data-tool="eggs">🪖<small>兵蚁卵 25</small></button>
-  <button class="btn" data-tool="eggr">🧪<small>远程卵 30</small></button>
-  <button class="btn" data-tool="eggt">🛡<small>坦克卵 40</small></button>
+  <button class="btn" id="tb-eggr" data-tool="eggr">🧪<small>远程卵 30</small></button>
+  <button class="btn" id="tb-eggt" data-tool="eggt">🛡<small>坦克卵 40</small></button>
   <button class="btn" data-tool="hole">🕳<small>新入口 30</small></button>
   <button class="btn" data-tool="demolish">❌<small>拆除</small></button>
   <button class="btn" data-tool="transfer">🔀<small>调蚁</small></button>
@@ -153,7 +153,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.4（面板暂停+toast 错开）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v3.0（兵种解锁制）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -1421,6 +1421,8 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     }else if(tool==="egg"||tool==="eggs"||tool==="eggr"||tool==="eggt"){
       const caste={egg:"worker",eggs:"soldier",eggr:"ranged",eggt:"tank"}[tool];
       const cost=CASTE_STATS[caste].cost;
+      if(caste!=="worker"&&caste!=="soldier"&&!meta.unlocks[caste]){toast(CASTE_CN[caste]+" 尚未解锁（🔒"+UNLOCK_COST[caste]+"🍯 跨局王浆）");return;}
+      if(CAPS_UL&&CAPS_UL.length&&!CAPS_UL.includes(caste)){toast("本章尚未解锁"+CASTE_CN[caste]+"（后续章节开放）");return;}
       const n=nurseries.find(n=>n.ti===ti&&!broods.some(b=>b.ti===ti));
       if(!n){toast("点击空的育婴格放卵");return;}
       if(n.bound){toast("该格已绑定"+CASTE_CN[n.bound]+"（存活中）——换兵种请先拆除");return;} // v1.24 绑定格不可重复放卵
@@ -1572,6 +1574,8 @@ canvas.addEventListener("contextmenu",e=>{
 /* ---------------- UI 绑定 ---------------- */
 document.querySelectorAll("#toolbar .btn[data-tool]").forEach(b=>{
   b.addEventListener("click",()=>{
+    const _t=b.dataset.tool; // v3.0 解锁拦截：未解锁兵种点击=解锁流程（不切工具）
+    if((_t==="eggr"&&!meta.unlocks.ranged)||(_t==="eggt"&&!meta.unlocks.tank)){tryUnlock(_t==="eggr"?"ranged":"tank");return;}
     document.querySelectorAll("#toolbar .btn[data-tool]").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");tool=b.dataset.tool;
   });
@@ -2449,6 +2453,7 @@ function initGame(seed,key,levelId){
   if(levelId&&LEVELS[levelId]){LEVEL=LEVELS[levelId];seed=LEVEL.seed||seed;key=LEVEL.diff||"normal";}
   else LEVEL=LEVELS.free;
   const CAP=LEVEL.caps||{};
+  CAPS_UL=CAP.unlocks||null; // 关卡兵种白名单（null=按 meta 解锁制）
   CONFIG.SEED=seed;rng=mulberry32(seed);
   diffKey=key;DIFF=CONFIG.DIFF[key];
   // 重置全部状态
@@ -2456,7 +2461,7 @@ function initGame(seed,key,levelId){
   starvingNow=false;dayT=0;kills=0;peakPop=CONFIG.START_WORKERS;waveNo=0;simTime=0;
   waveTimer=DIFF.wave;fogTimer=0;hiveTick=0;nightSeen=false;endlessScale=1.0;sfxWave=0;
   ants=[];broods=[];nurseries=[];markers=[];enemies=[];predators=[];corpses=[];dust=[];projectiles=[];
-  jelly=0;jellyEarned=0;halfMark=0;jellyLevels={worker:1,soldier:1,ranged:1,tank:1};
+  jelly=0;jellyEarned=0;meta.jellySnap=0;halfMark=0;jellyLevels={worker:1,soldier:1,ranged:1,tank:1};
   jellyUpgrades={worker:null,soldier:null,ranged:null,tank:null};
   projFired=0;stunSeen=0;titanEatSeen=0;
   titan=null;titanTimer=-1;titanAnnounced=false;
@@ -2503,6 +2508,7 @@ function initGame(seed,key,levelId){
   view=L_UNDER;inGame=true;
   levelState={rooms:[],roomsDone:0,raids:0,raidWave:0,eggsLost:0,raidTimer:0,eggDrops:[]};
   alertIcons=[];
+  updateUnlockUI(); // v3.0 工具条解锁态刷新
   if(LEVEL.id!=="free"){toast(LEVEL.name+"："+LEVEL.objective);levelInit();}
   document.getElementById("menu").style.display="none";
   document.getElementById("report").style.display="none";
@@ -2696,14 +2702,14 @@ const LEVELS={
   free:{id:"free",name:"自由局",brief:"无尽沙盒：自己定节奏",caps:{}},
   ch1:{id:"ch1",name:"第一章 · 筑巢",brief:"纯地下：挖开隐藏房间，清出全巢",seed:1101,
     startFood:80,startAnts:7,startSoldiers:0,nurseries:6,
-    caps:{surface:false,daynight:false,waves:false,titan:false,preds:false},
+    caps:{surface:false,daynight:false,waves:false,titan:false,preds:false,unlocks:["worker","soldier"]}, // 教学关强制工兵（未教的不给）
     reward:{jelly:3},objective:"清出全部 12 个房间 ＋ 蚁群达 25"},
   ch2:{id:"ch2",name:"第二章 · 滩头",brief:"海滩立足：活过三昼夜，击退 4 次掠卵袭扰",seed:2202,
     startFood:100,startAnts:7,startSoldiers:2,nurseries:8,
     caps:{surface:true,daynight:true,waves:false,titan:false,preds:true},
     reward:{jelly:5},objective:"存活满 3 个昼夜 ＋ 击退全部 4 次掠卵袭扰"},
 };
-let LEVEL=LEVELS.free;
+let LEVEL=LEVELS.free;let CAPS_UL=null;
 let levelState={rooms:[],roomsDone:0,raids:0,raidWave:0,eggsLost:0,raidTimer:0,eggDrops:[]};
 const SAVE_KEY_BASE="antnest_save_v1";
 function saveKey(){return SAVE_KEY_BASE+"_"+(LEVEL?LEVEL.id:"free");} // 存档按关卡分档，互不覆盖
@@ -2717,6 +2723,7 @@ let saveBlocked=false;
 function saveGame(){
   if(!inGame)return;
   try{
+    meta.jellyTotal+=jellyEarned-(meta.jellySnap||0);meta.jellySnap=jellyEarned; // v3.0 跨局王浆余额实时入账（增量法防重复计）
     localStorage.setItem(saveKey(),JSON.stringify({v:1,seed:CONFIG.SEED,diffKey,level:LEVEL.id,
       stock:Math.floor(stock),jelly,jellyEarned,jellyUpgrades,jellyLevels,simTime:Math.floor(simTime),dayT,halfMark,
       kills,peakPop,waveNo,endlessScale,stratKey,queenHp:queen?Math.ceil(queen.hp):0,curGroup,
@@ -2782,9 +2789,32 @@ document.getElementById("btn-continue").addEventListener("click",continueGame);
 
 /* ---------------- M4-2 跨局 meta（战绩独立存储）+ M4-5 新手引导 ---------------- */
 const META_KEY="antnest_meta_v1";
-let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,ch1:0,ch2:0};
-try{Object.assign(meta,JSON.parse(localStorage.getItem(META_KEY)||"{}"));}catch(e){}
+let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,jellySnap:0,ch1:0,ch2:0,unlocks:{ranged:false,tank:false}};
+const UNLOCK_COST={ranged:5,tank:8}; // [PH] 兵种解锁价（跨局王浆）：ch1 通关 3 → 解锁远程；+ch2 5=8 → 解锁坦克
+try{const _m=JSON.parse(localStorage.getItem(META_KEY)||"{}");
+  if(_m){if(!_m.unlocks)_m.unlocks={ranged:false,tank:false};
+    Object.assign(meta,_m);}}catch(e){}
+if(new URLSearchParams(location.search).get("autotest"))meta.unlocks={ranged:true,tank:true}; // autotest 全解锁（测试依赖远程/坦克步骤）
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(meta));}catch(e){}}
+function updateUnlockUI(){ // v3.0 工具条锁定态：未解锁兵种灰化+🔒价签
+  for(const cs of ["ranged","tank"]){
+    const b=document.getElementById("tb-"+(cs==="ranged"?"eggr":"eggt"));if(!b)continue; // id 映射（按钮 id=tb-eggr/eggt）
+    const un=meta.unlocks[cs];
+    b.style.opacity=un?"1":".45";
+    b.innerHTML=un?(cs==="ranged"?"🧪<small>远程卵 30</small>":"🛡<small>坦克卵 40</small>"):"🔒<small>解锁 "+UNLOCK_COST[cs]+"🍯</small>";
+  }
+}
+let unlockConfirm=null;
+function tryUnlock(cs){ // 两段式确认解锁（花跨局王浆）
+  const cost=UNLOCK_COST[cs];
+  if(meta.jellyTotal<cost){toast("跨局王浆不足（需 "+cost+"，当前 "+(meta.jellyTotal|0)+"）——多打几局攒王浆");return;}
+  if(unlockConfirm!==cs){unlockConfirm=cs;setTimeout(()=>{if(unlockConfirm===cs)unlockConfirm=null;},2500);
+    toast("再点一次确认：花 "+cost+" 🍯 跨局王浆永久解锁"+CASTE_CN[cs]);return;}
+  unlockConfirm=null;
+  meta.jellyTotal-=cost;meta.unlocks[cs]=true;metaSave();
+  updateUnlockUI();
+  toast("🍯 "+CASTE_CN[cs]+" 已永久解锁！（跨局生效）");
+}
 function metaLine(){
   const el=document.getElementById("meta-line");if(!el)return;
   el.textContent=meta.games?("战绩：已开 "+meta.games+" 巢 ｜ 灭巢 "+meta.wins+" 次 ｜ 最长存活 "+meta.bestMin+" 分钟 ｜ 战役 "+(meta.ch1?1:0)+"/2 ｜ 累计王浆 "+(meta.jellyTotal|0))
@@ -2811,6 +2841,7 @@ function checkOrient(){ // M4-1：手机竖屏明确不做（<768px 挡板写死
   b.style.display=innerWidth<768?"flex":"none";
 }
 addEventListener("resize",checkOrient);checkOrient();
+updateUnlockUI(); // v3.0 初始解锁态渲染
 
 /* ---------------- 冒烟自测（?autotest=1）
    真实 DOM 事件管线驱动；战斗/波次用调试注入点构造场景；
