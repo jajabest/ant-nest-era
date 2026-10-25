@@ -153,7 +153,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.1（游戏内关卡切换）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.2（事件指示器）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -665,7 +665,8 @@ function enemyRaiderStep(e,dt){ // 掠蚁：地表→洞口→下井→抢卵→
   raiderMove(e,dt,b.x,b.y);
   if(dist2(e.x,e.y,b.x,b.y)<1.2){
     const bi=broods.findIndex(x=>x.ti===b.ti);
-    if(bi>=0){e.egg=broods[bi];broods.splice(bi,1);e.phase2="flee";toast("⚠ 掠蚁叼走了一枚卵！");sfx("die");}
+    if(bi>=0){e.egg=broods[bi];broods.splice(bi,1);e.phase2="flee";toast("⚠ 掠蚁叼走了一枚卵！");sfx("die");
+      pushAlert(e.x,e.y,L_UNDER,"❗","#ff5a4e",2.5);}
   }
 }
 function levelEggTick(dt){ // 被击杀的掠蚁掉蛋 → 我方工蚁路过拾回
@@ -856,6 +857,7 @@ function enemyHiveTick(dt){
 }
 function triggerWave(){
   sfx("alarm");
+  for(const o of holes)pushAlert(o.sx+0.5,o.sy-0.5,L_OVER,"⚠","#ff5a4e",5);
   const force=enemies.filter(e=>e.caste==="esoldier"||(e.caste==="eworker"&&rng()<0.5));
   for(const e of force)e.state="attack";
   if(force.length>0)toast("⚠ 敌群进攻！"+force.length+" 只敌蚁来袭");
@@ -869,6 +871,7 @@ function scheduleTitan(){
 }
 function spawnTitan(){
   sfx("roar");
+  pushAlert(enemyNest.x,enemyNest.y,L_OVER,"⚠","#ff5a4e",5); // 巨兽自敌巢方向来
   // 从离敌巢最近的地图边缘进场；玩家蚁群聚集地=主洞口方向
   const home=holes[0];
   const edge={x:clamp(home.sx+(home.sx<SGW/2?-12:12),2,SGW-3),y:clamp(home.sy+(home.sy<SGH/2?-12:12),2,SGH-3)};
@@ -963,6 +966,10 @@ function moleStep(p,dt){ // M5 鼹蟋蟀：朝蚁后方向反挖土逼近——�
 }
 function predStep(p,dt){
   if(p.kind==="molecricket"){moleStep(p,dt);return;} // M5 鼹蟋蟀专属行为
+  if(!p.alerted){ // v2.2 天敌首次逼近巢区：感叹号提示（每只一次）
+    const hx=(p.layer===L_OVER)?64:NEST.x, hy=(p.layer===L_OVER)?70:NEST.y;
+    if(dist2(p.x,p.y,hx,hy)<260){p.alerted=true;pushAlert(p.x,p.y,p.layer,"!","#ff9a4e",2.5);sfx("alarm");}
+  }
   if(!p.alive){
     p.respawnT-=dt;
     if(p.respawnT<=0){p.alive=true;p.hp=p.maxhp;p.x=p.guard.x;p.y=p.guard.y;}
@@ -1740,6 +1747,31 @@ function sfx(name){
   }
 }
 
+/* ---------------- v2.2 事件指示器（原作式感叹号/警告图标：悬浮+脉动，自动过期） ---------------- */
+let alertIcons=[];
+function pushAlert(x,y,layer,text,color,dur){
+  alertIcons.push({x,y,layer,text:text||"!",color:color||"#ff5a4e",ttl:dur||3});
+}
+function alertTick(dt){
+  for(let i=alertIcons.length-1;i>=0;i--){alertIcons[i].ttl-=dt;if(alertIcons[i].ttl<=0)alertIcons.splice(i,1);}
+}
+function drawAlerts(c,layer){
+  const t=performance.now()/1000, pulse=1+Math.sin(t*6)*0.12;
+  for(const a of alertIcons){
+    if(a.layer!==layer)continue;
+    const x=a.x*CONFIG.TILE, y=a.y*CONFIG.TILE-14;
+    const fade=a.ttl<0.6?a.ttl/0.6:1;
+    c.globalAlpha=fade;
+    c.fillStyle="rgba(20,16,12,.85)";
+    c.beginPath();c.arc(x,y,9*pulse,0,7);c.fill();
+    c.strokeStyle=a.color;c.lineWidth=1.5;c.stroke();
+    c.fillStyle=a.color;c.font="bold "+Math.round(11*pulse)+"px sans-serif";c.textAlign="center";
+    c.fillText(a.text,x,y+4);
+    c.globalAlpha=fade*0.9;
+    c.beginPath();c.moveTo(x-4,y+10*pulse);c.lineTo(x+4,y+10*pulse);c.lineTo(x,y+16*pulse);c.closePath();c.fill();
+    c.globalAlpha=1;
+  }
+}
 /* ---------------- 升级面板（M3-3：王浆 + 分支二选一锁死） ---------------- */
 const jellyEl=document.getElementById("jellypanel");
 const JELLY_BRANCHES={
@@ -2046,7 +2078,7 @@ function render(){
   const under=view===L_UNDER;
   const cm=cam();
   c.translate(innerWidth/2,innerHeight/2);c.scale(cm.z,cm.z);c.translate(-cm.x,-cm.y);
-  if(under){renderUnder(c);}else{renderOver(c);}
+  if(under){renderUnder(c);drawAlerts(c,L_UNDER);}else{renderOver(c);drawAlerts(c,L_OVER);} // v2.2 事件指示器
 }
 function renderUnder(c){
   if(dirtyMap)bakeAllU();
@@ -2285,6 +2317,7 @@ function update(dt){
   if(stockShown>stock)stockShown=stock;
   else if(stockShown<stock)stockShown=Math.min(stock,stockShown+1);
   tutTick(dt); // M4-5 新手引导步进
+  alertTick(dt); // v2.2 指示器过期
   levelTick(dt); // M5 关卡逻辑（房间清出/掠卵波次/胜负）
   levelEggTick(dt); // M5 被抢卵的拾回
   // M3-3 王浆：存活每半个昼夜天 +1（v1.20 节奏改判：入夜/黎明各结算一次，首枚 4 分钟到账）
@@ -2447,6 +2480,7 @@ function initGame(seed,key,levelId){
   document.getElementById("btn-view").style.display=CAP.surface===false?"none":"";
   view=L_UNDER;inGame=true;
   levelState={rooms:[],roomsDone:0,raids:0,raidWave:0,eggsLost:0,raidTimer:0,eggDrops:[]};
+  alertIcons=[];
   if(LEVEL.id!=="free"){toast(LEVEL.name+"："+LEVEL.objective);levelInit();}
   document.getElementById("menu").style.display="none";
   document.getElementById("report").style.display="none";
@@ -2615,6 +2649,7 @@ function spawnRaiders(w){ // 第二章：掠蚁从地表远角掠蚁巢出发 �
   }
   toast("⚠ 掠蚁来了——"+w.n+" 只冲向你的育婴室！");
   sfx("alarm");
+  pushAlert(NEST.x,NEST.y-4,L_UNDER,"!","#ff5a4e",5);
 }
 function levelWin(reason){ // 关卡通关：奖励入 meta + 战报
   if(!inGame)return;
