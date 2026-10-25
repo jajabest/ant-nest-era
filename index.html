@@ -153,7 +153,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.3（威胁追踪标）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.4（面板暂停+toast 错开）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -1853,8 +1853,16 @@ function renderJelly(){
     });
   });
 }
-function openJelly(){jellyEl.style.display="flex";renderJelly();}
-function closeJelly(){jellyEl.style.display="none";}
+/* v2.4 面板自动暂停：开面板暂存速度置 0（战斗期开面板不再错过战况），关面板恢复；玩家手动暂停优先 */
+let panelPauseN=0,panelPrev=null;
+function setPanelPause(on){
+  if(on){panelPauseN++;
+    if(panelPauseN===1){panelPrev={speed,userPaused};speed=0;}}
+  else{panelPauseN=Math.max(0,panelPauseN-1);
+    if(panelPauseN===0&&panelPrev){if(!panelPrev.userPaused)speed=panelPrev.speed;panelPrev=null;}}
+}
+function openJelly(){jellyEl.style.display="flex";renderJelly();setPanelPause(true);}
+function closeJelly(){jellyEl.style.display="none";setPanelPause(false);}
 document.getElementById("btn-jelly").addEventListener("click",()=>{
   if(!inGame)return;
   jellyEl.style.display==="flex"?closeJelly():openJelly();
@@ -2337,7 +2345,8 @@ function update(dt){
   if(dayT-halfMark>=CONFIG.DAY_LEN){
     halfMark+=CONFIG.DAY_LEN;
     jelly+=CONFIG.JELLY_DAY;jellyEarned+=CONFIG.JELLY_DAY;
-    toast((isNight()?"🌙 入夜":"☀ 黎明")+"——王浆 +1（当前 "+jelly+"）");
+    const _nightMsg=(isNight()?"🌙 入夜":"☀ 黎明")+"——王浆 +1（当前 "+jelly+"）";
+    setTimeout(()=>toast(_nightMsg),800); // v2.4 错开 0.8s：先让昼夜切换提示显示完整，再报王浆（原两 toast 同帧互顶）
   }
   if(titanTimer>0){ // M3-5 巨兽进场倒计时
     titanTimer-=dt;
@@ -2552,13 +2561,15 @@ function campaignList(){
     hasFree?"继续自由局":"开始自由局",
     ()=>{document.getElementById("campaign").style.display="none";continueFree();});
 }
-document.getElementById("btn-campaign").addEventListener("click",()=>{campaignList();document.getElementById("campaign").style.display="flex";});
-document.getElementById("btn-campaign-ingame").addEventListener("click",()=>{campaignList();document.getElementById("campaign").style.display="flex";}); // v2.1 游戏内也可打开关卡面板
-document.getElementById("btn-campaign-back").addEventListener("click",()=>{document.getElementById("campaign").style.display="none";});
+document.getElementById("btn-campaign").addEventListener("click",()=>{campaignList();document.getElementById("campaign").style.display="flex";setPanelPause(true);});
+document.getElementById("btn-campaign-ingame").addEventListener("click",()=>{campaignList();document.getElementById("campaign").style.display="flex";setPanelPause(true);}); // v2.1 游戏内也可打开关卡面板
+document.getElementById("btn-campaign-back").addEventListener("click",()=>{document.getElementById("campaign").style.display="none";setPanelPause(false);});
 function startLevel(id){ // 进入关卡：先自动存当前局（分键存档互不覆盖），再切关卡定义
   if(inGame)saveGame();
   initGame(LEVELS[id].seed,LEVELS[id].diff||"normal",id);
   document.getElementById("campaign").style.display="none";
+  setPanelPause(false); // 切关后面板已关，恢复速度（新关从 1× 开始）
+  speed=1;userPaused=false;
 }
 function continueFree(){ // 从关卡切回自由局：有档续、无档开新
   if(inGame)saveGame();
@@ -2567,6 +2578,7 @@ function continueFree(){ // 从关卡切回自由局：有档续、无档开新
   if(d&&d.v===1)continueGame();
   else initGame(Math.floor(Math.random()*99999),"normal","free");
   document.getElementById("campaign").style.display="none";
+  setPanelPause(false);speed=1;userPaused=false;
 }
 document.getElementById("btn-start").addEventListener("click",()=>{
   const s=document.getElementById("inp-seed").value.trim();
