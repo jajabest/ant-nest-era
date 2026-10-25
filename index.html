@@ -153,7 +153,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.2（事件指示器）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v2.3（威胁追踪标）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -616,6 +616,7 @@ function addPred(kind,x,y){
     cdMax:sp?CONFIG.SPIDER_CD:mc?CONFIG.MOLE_CD:CONFIG.BEETLE_CD,
     speed:sp?CONFIG.SPIDER_SPEED:mc?CONFIG.MOLE_SPEED:CONFIG.BEETLE_SPEED,
     guard:{x,y},layer:mc?L_UNDER:L_OVER});
+  return predators[predators.length-1]; // M5：房间开箱/追踪需要实体引用
 }
 
 /* ---------------- M5 掠蚁 AI（第二章：偷卵者，原创机制） ---------------- */
@@ -1752,15 +1753,27 @@ let alertIcons=[];
 function pushAlert(x,y,layer,text,color,dur){
   alertIcons.push({x,y,layer,text:text||"!",color:color||"#ff5a4e",ttl:dur||3});
 }
+function pushTrack(target,layer,text,color){ // v2.3 追踪型：跟随实体，实体死亡自动移除（威胁在哪一眼可见）
+  alertIcons.push({target,layer,text:text||"!",color:color||"#ff5a4e",ttl:1e9,x:target.x,y:target.y});
+}
 function alertTick(dt){
-  for(let i=alertIcons.length-1;i>=0;i--){alertIcons[i].ttl-=dt;if(alertIcons[i].ttl<=0)alertIcons.splice(i,1);}
+  for(let i=alertIcons.length-1;i>=0;i--){
+    const a=alertIcons[i];
+    if(a.target){ // 追踪型：同步实体位置；实体死亡/消失即移除
+      if(a.target.alive===false||a.target.dead){alertIcons.splice(i,1);continue;}
+      a.x=a.target.x;a.y=a.target.y;
+    }else{
+      a.ttl-=dt;
+      if(a.ttl<=0){alertIcons.splice(i,1);continue;}
+    }
+  }
 }
 function drawAlerts(c,layer){
   const t=performance.now()/1000, pulse=1+Math.sin(t*6)*0.12;
   for(const a of alertIcons){
     if(a.layer!==layer)continue;
     const x=a.x*CONFIG.TILE, y=a.y*CONFIG.TILE-14;
-    const fade=a.ttl<0.6?a.ttl/0.6:1;
+    const fade=a.target?1:(a.ttl<0.6?a.ttl/0.6:1);
     c.globalAlpha=fade;
     c.fillStyle="rgba(20,16,12,.85)";
     c.beginPath();c.arc(x,y,9*pulse,0,7);c.fill();
@@ -2609,8 +2622,8 @@ function levelRoomTrigger(ti){ // 房间开箱：挖开房内任一格 → 整�
     for(const t of r.tis){tile[t]=T_AIR;digReq[t]=0;}
     dirtyMap=true;flowClear();
     if(r.type==="food"){tileFood[gi(r.cx,r.cy)]=r.content;toast("土室里有东西——是食物。");}
-    else if(r.type==="beetle"){for(let i=0;i<r.content;i++)addPred("beetle",r.cx+(i%2),r.cy+(i/2|0));toast("⚠ 有东西醒了。先撤，攒够兵蚁再回来。");sfx("alarm");}
-    else if(r.type==="mole"){addPred("molecricket",r.cx,r.cy);toast("深处有更大的动静。它听见你了。");sfx("roar");}
+    else if(r.type==="beetle"){for(let i=0;i<r.content;i++){const p=addPred("beetle",r.cx+(i%2),r.cy+(i/2|0));pushTrack(p,L_UNDER,"虫","#ff5a4e");}toast("⚠ 有东西醒了。先撤，攒够兵蚁再回来。");sfx("alarm");}
+    else if(r.type==="mole"){const p=addPred("molecricket",r.cx,r.cy);pushTrack(p,L_UNDER,"⚠","#ff5a4e");toast("深处有更大的动静。它听见你了。");sfx("roar");}
     else toast("空室。");
     sfx("mark");
     return;
