@@ -153,7 +153,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v3.0（兵种解锁制）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v3.1（解锁经济调优）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -245,8 +245,8 @@ const CONFIG = {
   // M3-3 王浆与升级（[PH] §5 王浆产出/消耗行）
   JELLY_NEST: 3,                // 灭巢里程碑王浆（§5）
   JELLY_TITAN: 2,               // 杀巨兽王浆（§5）
-  JELLY_PRED: 1,                // [PH] 击杀天敌（蜘蛛/甲虫）+1——v1.21 战神反馈「解锁新兵种不能只要一两个」：王浆总量不够买齐 4 兵种分支（7 枚），加可猎杀渠道（天敌可重生 300s，非无限刷）
-  JELLY_DAY: 1,                 // 存活每半个昼夜天 +1（v1.20 战神反馈「得不到王浆」节奏改判：原 1 天 1 枚=首枚 8 分钟，升级面板前期纯摆设；昼夜交替各 1 枚→首枚 4 分钟、之后每 4 分钟一枚，rationale 入 §5）
+  JELLY_PRED: 2, // v3.1 猎杀天敌 1→2（鼓励主动清场）                // [PH] 击杀天敌（蜘蛛/甲虫）+1——v1.21 战神反馈「解锁新兵种不能只要一两个」：王浆总量不够买齐 4 兵种分支（7 枚），加可猎杀渠道（天敌可重生 300s，非无限刷）
+  JELLY_DAY: 2, // v3.1 王浆经济提速：昼夜结算 1→2                 // 存活每半个昼夜天 +1（v1.20 战神反馈「得不到王浆」节奏改判：原 1 天 1 枚=首枚 8 分钟，升级面板前期纯摆设；昼夜交替各 1 枚→首枚 4 分钟、之后每 4 分钟一枚，rationale 入 §5）
   JELLY_COST: {worker:1, soldier:2, ranged:2, tank:3}, // [PH] 升级单价（§5 1-3 区间内：特技强度定价）
   WORKER_CARRY_UP: 3,           // [PH] 勤劳型载量 +
   LOAD_FAST: 0.5,               // [PH] 勤劳型采集动作缩减 s
@@ -294,7 +294,7 @@ const CONFIG = {
   // v1.25 战神反馈「和原作一样升级」：王浆=可采集资源 + 兵种 1→2→3 级成长线（原作对齐）
   S_JELLY_N: 2,                 // 地表王浆节点数 [PH]
   U_JELLY_N: 1,                 // 地下王浆节点数 [PH]
-  JELLY_NODE_CAP: 80,           // 节点储量 [PH]（一局全采约 6-10 枚）
+  JELLY_NODE_CAP: 120, // v3.1 节点储量 +50%           // 节点储量 [PH]（一局全采约 6-10 枚）
   JELLY_NODE_R: 0.5,            // 节点供给率 [PH]
   LV_COST: {2:2, 3:3},          // 兵种升级价：2 级 2 枚、3 级 3 枚 [PH]（满级 5 枚/兵种——单局够升 1-2 条线，多局 meta 留 M4-2）
   LV_GAIN: 0.18,                // 每级 HP/ATK +18% [PH]（3 级=+36%，与分支叠加）
@@ -2703,11 +2703,11 @@ const LEVELS={
   ch1:{id:"ch1",name:"第一章 · 筑巢",brief:"纯地下：挖开隐藏房间，清出全巢",seed:1101,
     startFood:80,startAnts:7,startSoldiers:0,nurseries:6,
     caps:{surface:false,daynight:false,waves:false,titan:false,preds:false,unlocks:["worker","soldier"]}, // 教学关强制工兵（未教的不给）
-    reward:{jelly:3},objective:"清出全部 12 个房间 ＋ 蚁群达 25"},
+    reward:{jelly:4},objective:"清出全部 12 个房间 ＋ 蚁群达 25"},
   ch2:{id:"ch2",name:"第二章 · 滩头",brief:"海滩立足：活过三昼夜，击退 4 次掠卵袭扰",seed:2202,
     startFood:100,startAnts:7,startSoldiers:2,nurseries:8,
     caps:{surface:true,daynight:true,waves:false,titan:false,preds:true},
-    reward:{jelly:5},objective:"存活满 3 个昼夜 ＋ 击退全部 4 次掠卵袭扰"},
+    reward:{jelly:6},objective:"存活满 3 个昼夜 ＋ 击退全部 4 次掠卵袭扰"},
 };
 let LEVEL=LEVELS.free;let CAPS_UL=null;
 let levelState={rooms:[],roomsDone:0,raids:0,raidWave:0,eggsLost:0,raidTimer:0,eggDrops:[]};
@@ -2790,7 +2790,7 @@ document.getElementById("btn-continue").addEventListener("click",continueGame);
 /* ---------------- M4-2 跨局 meta（战绩独立存储）+ M4-5 新手引导 ---------------- */
 const META_KEY="antnest_meta_v1";
 let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,jellySnap:0,ch1:0,ch2:0,unlocks:{ranged:false,tank:false}};
-const UNLOCK_COST={ranged:5,tank:8}; // [PH] 兵种解锁价（跨局王浆）：ch1 通关 3 → 解锁远程；+ch2 5=8 → 解锁坦克
+const UNLOCK_COST={ranged:4,tank:6}; // v3.1 战神反馈「有点难解锁」：降档 // [PH] 兵种解锁价（跨局王浆）：ch1 通关 3 → 解锁远程；+ch2 5=8 → 解锁坦克
 try{const _m=JSON.parse(localStorage.getItem(META_KEY)||"{}");
   if(_m){if(!_m.unlocks)_m.unlocks={ranged:false,tank:false};
     Object.assign(meta,_m);}}catch(e){}
@@ -3019,7 +3019,7 @@ if(new URLSearchParams(location.search).has("autotest")){
     // 猎杀王浆确定性单测（混战里目标可能被守卫蜘蛛咬死——不产王浆，故直接结算一只 fresh 甲虫）
     const jp2=window.__M2.state.jelly;
     step("猎杀结算单测",()=>{const fresh=window.__M2.spawnPred("beetle",sS.x+2,sS.y+2);onDeath(fresh,ants[0]);});
-    assert("猎杀天敌王浆+1",window.__M2.state.jelly===jp2+1);
+    assert("猎杀天敌王浆+"+CONFIG.JELLY_PRED,window.__M2.state.jelly===jp2+CONFIG.JELLY_PRED);
     // 7. 敌群进攻波（兵蚁回防洞口拦截）——先恢复敌群经济（小规模+蚁后满血，防灭局连锁）
     step("恢复敌群",()=>{queen.hp=queen.maxhp;enemyNest.hatchT=0;enemyNest.food=150;waveTimer=DIFF.wave;
       for(let i=0;i<2;i++)addEnemy(enemyNest.x,enemyNest.y,"esoldier");
