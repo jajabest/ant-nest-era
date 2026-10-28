@@ -158,7 +158,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.2（图层交互+人口守恒修复）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.3（分支补线+解锁价对齐）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -585,6 +585,7 @@ function statOf(a,key){ // 升级 buff 统一出口（v1.25：兵种等级系数
     if(a.caste==="ranged"&&u==="rapid")return s.cd*(lv3?0.33:CONFIG.RANGED_RAPID.cd);
     return s.cd;
   }
+  if(key==="spd"&&a.caste==="swarmling"&&u==="jizou")return 2.0; // v4.3 疾走分支接线（原描述了未实现）
   if(key==="atk"){
     let v=s.atk*lvK;
     if(a.caste==="ranged"&&u==="proj")v*=1+(lv3?CONFIG.RANGED_PROJ.dmg*CONFIG.LV3_BOOST:CONFIG.RANGED_PROJ.dmg);
@@ -825,6 +826,7 @@ function tryAttack(att,tgt,dt){
 }
 // M3-3 我方蚁受击统一结算：警觉闪避（worker）/坚壁减伤（soldier）——v1.25 数值函数化（3 级强化）
 function damageAnt(a,dmg){
+  if(a.state==="carried"&&jellyUpgrades.medic==="jiagu")return; // v4.3 加固分支接线（原描述了未实现）
   if(a.caste==="worker"&&jellyUpgrades.worker==="alert"&&rng()<evadeRate())return; // 闪避：伤害归零
   if(a.caste==="soldier"&&jellyUpgrades.soldier==="wall")dmg*=1-armorRate();
   a.hp-=dmg;a.lastHitT=simTime;sfx("clash");
@@ -2972,7 +2974,7 @@ document.getElementById("btn-continue").addEventListener("click",continueGame);
 /* ---------------- M4-2 跨局 meta（战绩独立存储）+ M4-5 新手引导 ---------------- */
 const META_KEY="antnest_meta_v1";
 let meta={games:0,wins:0,bestMin:0,tut:0,jellyTotal:0,jellySnap:0,ch1:0,ch2:0,unlocks:{ranged:false,tank:false,medic:false,jawjumper:false,boomer:false,swarmling:false}};
-const UNLOCK_COST={ranged:3,tank:6,medic:10,jawjumper:12,boomer:10,swarmling:6}; // v3.2 战神定版：远程 3 / 坦克 6（其余王浆来源保持原值）
+const UNLOCK_COST={ranged:3,tank:6,medic:8,jawjumper:10,boomer:10,swarmling:6}; // v4.3 战神反馈「解锁价和技能不太准确」：疗伤 10→8、跳颌 12→10——价签与实战价值对齐（远程/坦克/爆蚁/群蚁维持定版）
 try{const _m=JSON.parse(localStorage.getItem(META_KEY)||"{}");
   if(_m){if(!_m.unlocks)_m.unlocks={ranged:false,tank:false,medic:false,jawjumper:false,boomer:false,swarmling:false};
     for(const k of ["medic","jawjumper","boomer","swarmling"])if(_m.unlocks[k]===undefined)_m.unlocks[k]=false;
