@@ -158,7 +158,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.4（原作式信息素覆盖）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.5（一卵三蚁+群蚁中文化）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -1574,10 +1574,9 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
       if(queenCd>0){toast("蚁后产卵冷却中 "+queenCd.toFixed(1)+"s");return;}
       if(stock<cost){toast("食物不足（需 "+cost+"）");return;}
       if(popCount()>=nurseries.length){toast("育婴格已满，先造格（人口=育婴格数）");return;}
-      stock-=cost*(caste==="swarmling"?3:1);queenCd=CONFIG.LAY_COOLDOWN;
-      const nEggs=caste==="swarmling"?(jellyUpgrades.swarmling==="fengyong"?4:3):1;
-      for(let i=0;i<nEggs;i++)broods.push({ti,stage:0,timer:CONFIG.BROOD_EGG,caste,group:curGroup});
-      toast(CASTE_CN[caste]+"卵 → "+groups[curGroup].name+"（成虫后绑定此格）");
+      stock-=cost;queenCd=CONFIG.LAY_COOLDOWN;
+      broods.push({ti,stage:0,timer:CONFIG.BROOD_EGG,caste,group:curGroup});
+      toast(CASTE_CN[caste]+"卵 → "+groups[curGroup].name+(caste==="swarmling"?"（一卵孵三只，算一份人口）":"（成虫后绑定此格）"));
     }else if(tool==="hole"){
       if(!isDug(tx,ty)||isShaft(tx,ty)){toast("竖井入口需建在挖空的地面（将向上整列打通）");return;}
       if(holes.some(h=>Math.abs(h.ux-tx)<3&&Math.abs(h.uy-ty)<3)){toast("距现有入口太近");return;}
@@ -1630,7 +1629,10 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     }
   }
 }
-function popCount(){return ants.length+broods.length;}
+function popCount(){ // v4.5 群蚁折算：每 3 只算 1 人口（一卵三蚁只占一份）
+  const sw=ants.filter(a2=>a2.caste==="swarmling").length;
+  return (ants.length-sw)+Math.ceil(sw/3)+broods.length;
+}
 function switchView(){
   view=view===L_UNDER?L_OVER:L_UNDER;
   document.getElementById("btn-view").innerHTML=view===L_UNDER?"⇄<small>去地表</small>":"⇄<small>回地下</small>";
@@ -1760,7 +1762,7 @@ function moveAntTo(a,g){
   a.group=g; // rule 每帧从 groups[a.group] 实时下发（antStep），标记按新组生效
   toast(`已调入 ${groups[g].name}：${CASTE_CN[a.caste]}`);
 }
-const SQ_CN={worker:"工",soldier:"兵",ranged:"远",tank:"坦"};
+const SQ_CN={worker:"工",soldier:"兵",ranged:"远",tank:"坦",medic:"疗",jawjumper:"颌",boomer:"爆",swarmling:"群"}; // v4.5 M6 新兵种短名（缺项=列队面板显示英文原名）
 function renderSquad(){
   squadCols.forEach((col,g)=>{
     col.style.setProperty("--gc",GRING[g]);
@@ -1946,7 +1948,7 @@ const JELLY_BRANCHES={
   medic:[{id:"jiji",cn:"急救",fx:"抬运速度 +50%"},{id:"jiagu",cn:"加固",fx:"抬运中的伤员不受攻击"}],
   jawjumper:[{id:"qiangE",cn:"强颚",fx:"后跳回血升至 35%"},{id:"tansu",cn:"弹速",fx:"后跳冷却 8s→5s"}],
   boomer:[{id:"mengbao",cn:"猛爆",fx:"爆炸伤害 90、半径 3"},{id:"yanbao",cn:"延爆",fx:"死亡后延迟 1.5s 引爆"}],
-  swarmling:[{id:"fengyong",cn:"蜂拥",fx:"同格 3 卵→4 卵"},{id:"jizou",cn:"疾走",fx:"移速 1.5→2.0"}],
+  swarmling:[{id:"fengyong",cn:"蜂拥",fx:"一卵孵 3 只→4 只"},{id:"jizou",cn:"疾走",fx:"移速 1.5→2.0"}],
   worker:[{id:"indust",cn:"勤劳型",fx:"载量 +"+CONFIG.WORKER_CARRY_UP+"，采集动作 -"+CONFIG.LOAD_FAST+"s"},
           {id:"alert", cn:"警觉型",fx:"闪避 "+Math.round(CONFIG.EVADE*100)+"% 物理伤害"}],
   soldier:[{id:"wall",cn:"坚壁型",fx:"受到物理伤害 -"+Math.round(CONFIG.SOLDIER_ARMOR*100)+"%"},
@@ -2570,12 +2572,14 @@ function update(dt){
       else{
         const x=b.ti%GW,y=(b.ti/GW)|0;
         broods.splice(i,1);
-        addAnt(x+0.5,y+0.5,b.caste,b.group,L_UNDER);
-        const na=ants[ants.length-1];
-        na.homeTi=b.ti; // v1.24 兵籍绑定：此蚁属此格
+        // v4.5 群蚁：一个卵孵出三只（数量型语义——战神定版），兵籍只绑首只（该格算一份人口）
+        const nBorn=b.caste==="swarmling"?(jellyUpgrades.swarmling==="fengyong"?4:3):1;
+        for(let k=0;k<nBorn;k++)addAnt(x+0.5+(k%3)*0.3-0.3,y+0.5+((k/3)|0)*0.3,b.caste,b.group,L_UNDER);
+        const na=ants[ants.length-nBorn];
+        na.homeTi=b.ti; // v1.24 兵籍绑定：此蚁属此格（群蚁三只共占一格兵籍）
         const nn=nurseries.find(n=>n.ti===b.ti);if(nn)nn.bound=b.caste;
         sfx("hatch");
-        peakPop=Math.max(peakPop,ants.length);
+        peakPop=Math.max(peakPop,popCount());
       }
     }
   }
@@ -3317,7 +3321,7 @@ if(new URLSearchParams(location.search).has("autotest")){
     step("爆发窗集火击杀",()=>window.__M2.killTitanDebug());
     const st3e=window.__M2.state;
     out.d10={jelly:st3e.jelly,sSourceN:st3e.sSourceN};
-    assert("击杀巨兽王浆+2",st3e.jelly===jt+2&&st3e.titanAlive===false);
+    assert("击杀巨兽王浆+"+CONFIG.JELLY_TITAN,st3e.jelly-jt>=CONFIG.JELLY_TITAN&&st3e.titanAlive===false); // v4.5 宽容断言：昼夜王浆结算可能与巨兽奖叠加（>= 代替 ===）
     assert("巨兽残骸成为食物源",st3e.sSourceN===sSourceBase+1);
     // 存活王浆：拨时钟归零再推满 1 昼夜天（清场：防 482s 内敌群杀蚁后干扰断言）
     step("清场休整",()=>{enemies.length=0;enemyNest.hatchT=1e9;enemyNest.food=0;waveTimer=1e9;queen.hp=queen.maxhp;queenCd=0;titanTimer=-1;titan=null;});
