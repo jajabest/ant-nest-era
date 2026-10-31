@@ -158,7 +158,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.5（一卵三蚁+群蚁中文化）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.6（列队统计通用化）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -1767,8 +1767,8 @@ function renderSquad(){
   squadCols.forEach((col,g)=>{
     col.style.setProperty("--gc",GRING[g]);
     const mem=ants.filter(a=>a.group===g);
-    const w=mem.filter(a=>a.caste==="worker").length,r=mem.filter(a=>a.caste==="ranged").length,t=mem.filter(a=>a.caste==="tank").length;
-    col.querySelector("h4 em").textContent=`${mem.length} 只 · 工${w}/兵${mem.length-w-r-t}/远${r}/坦${t}`;
+    const cnt={};for(const a of mem)cnt[a.caste]=(cnt[a.caste]||0)+1; // v4.6 兵种统计通用化（M6 漏改第三处：4 新兵种不在统计里）
+    col.querySelector("h4 em").textContent=`${mem.length} 只 · 工${cnt.worker||0}/兵${cnt.soldier||0}/远${cnt.ranged||0}/坦${cnt.tank||0}/疗${cnt.medic||0}/颌${cnt.jawjumper||0}/爆${cnt.boomer||0}/群${cnt.swarmling||0}`;
     const list=col.querySelector(".slist");list.innerHTML="";
     if(!mem.length){const e=document.createElement("div");e.className="empty";e.textContent="（空队）";list.appendChild(e);return;}
     for(const a of mem){
@@ -2482,7 +2482,7 @@ function updateHUD(dt){
   const cnt=[0,0,0];for(const a of ants)cnt[a.group]++;
   const cyc=CONFIG.DAY_LEN+CONFIG.NIGHT_LEN,ph=dayT%cyc;
   const dayIcon=isNight()?"🌙夜":"☀昼", remain=Math.ceil((isNight()?cyc-ph:CONFIG.DAY_LEN-ph));
-  hud.innerHTML=`${LEVEL.id!=="free"?`<span style="color:#ffd9a0">${LEVEL.name}</span>`:""}${levelObjective()} ｜ ${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b><small>/${capNow()}</small> ｜ 人口 <b>${ants.length}</b>/${nurseries.length} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
+  hud.innerHTML=`${LEVEL.id!=="free"?`<span style="color:#ffd9a0">${LEVEL.name}</span>`:""}${levelObjective()} ｜ ${dayIcon}<b>${remain}s</b> ｜ 食物 <b>${Math.floor(stockShown)}</b><small>/${capNow()}</small> ｜ 人口 <b>${popCount()}</b>/${nurseries.length+granaries.length*0} ｜ 卵幼 <b>${broods.length}</b> ｜ 🍯王浆 <b>${jelly}</b><br>`+
     `收入 <b>${R.toFixed(2)}</b>/s ｜ 击杀 <b>${kills}</b> ｜ 各队 <b>${cnt[0]}</b>/<b>${cnt[1]}</b>/<b>${cnt[2]}</b><br>`+
     `用时 <b>${(simTime/60|0)}:${String(simTime%60|0).padStart(2,"0")}</b> ｜ ${view===L_UNDER?"地下":"地表"} ｜ 当前 ${groups[curGroup].name}·${({forage:"采集",combat:"战斗",both:"兼顾"})[groups[curGroup].rule]}`+
     `${queenCd>0?` ｜ <span class="warn">产卵冷却 ${queenCd.toFixed(0)}s</span>`:""}`+
@@ -2712,12 +2712,12 @@ function endGame(win){
   sfx(win?"win":"lose");
   const rp=document.getElementById("report");
   if(LEVEL.id!=="free"){ // M5 关卡结算：目标达成说明 + 评分
-    const sc=LEVEL.id==="ch1"?(levelState.roomsDone>=12&&ants.length>=25?3:(levelState.roomsDone>=8?2:1))
+    const sc=LEVEL.id==="ch1"?(levelState.roomsDone>=12&&popCount()>=25?3:(levelState.roomsDone>=8?2:1))
       :(levelState.eggsLost===0?3:(levelState.eggsLost<=3?2:1));
     const stars="★".repeat(sc)+"☆".repeat(3-sc);
     setTimeout(()=>{const t=document.querySelector("#report .panel");if(t)t.insertAdjacentHTML("afterbegin",
       `<div style="font-size:14px;color:#ffd9a0;margin-bottom:6px">${LEVEL.name} 通关  ${stars}</div>
-       <div style="font-size:12px;opacity:.85;margin-bottom:8px">${levelState.reason||""}${LEVEL.id==="ch1"?` ｜ 土室 ${levelState.roomsDone}/12 ｜ 蚁群 ${ants.length}`:` ｜ 击退 ${levelState.raids}/4 ｜ 被抢卵 ${levelState.eggsLost}`} ｜ 奖励 🍯${(LEVEL.reward||{}).jelly||0}</div>`);},0);
+       <div style="font-size:12px;opacity:.85;margin-bottom:8px">${levelState.reason||""}${LEVEL.id==="ch1"?` ｜ 土室 ${levelState.roomsDone}/12 ｜ 蚁群 ${popCount()}`:` ｜ 击退 ${levelState.raids}/4 ｜ 被抢卵 ${levelState.eggsLost}`} ｜ 奖励 🍯${(LEVEL.reward||{}).jelly||0}</div>`);},0);
   }
   document.getElementById("rp-title").textContent=win?"🎉 灭巢成功 · 里程碑":"💀 蚁后陨落";
   document.getElementById("rp-sub").textContent=win?"敌群蚁后被击杀——王浆 +"+CONFIG.JELLY_NEST+"（升级面板随时可花）":"你的蚁巢就此终结";
@@ -2845,7 +2845,7 @@ function levelTick(dt){
         if(alive===0){r.done=true;levelState.roomsDone++;toast("土室清出（"+levelState.roomsDone+"/12）");}
       }
     }
-    if(levelState.roomsDone>=12&&ants.length>=25)levelWin("12 个土室全清，蚁群已成军");
+    if(levelState.roomsDone>=12&&popCount()>=25)levelWin("12 个土室全清，蚁群已成军");
   }
   if(LEVEL.id==="ch2"){
     while(levelState.raidPlan&&levelState.raidPlan.length&&simTime>=levelState.raidPlan[0].t){
@@ -2880,7 +2880,7 @@ function levelWin(reason){ // 关卡通关：奖励入 meta + 战报
 }
 function levelObjective(){ // HUD 目标行
   if(LEVEL.id==="free")return "";
-  if(LEVEL.id==="ch1")return "｜ 目标：土室 "+levelState.roomsDone+"/12 ｜ 蚁群 "+ants.length+"/25";
+  if(LEVEL.id==="ch1")return "｜ 目标：土室 "+levelState.roomsDone+"/12 ｜ 蚁群 "+popCount()+"/25";
   return "｜ 目标：击退掠蚁 "+levelState.raids+"/4 ｜ 存活 "+Math.floor(simTime/60)+"/24 分钟";
 }
 /* ---------------- 存档（M4-2 核心提前落地 v1.23）：单槽自动存 20s + 继续按钮 + 隐私模式提示 ----------------
