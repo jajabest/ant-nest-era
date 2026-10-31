@@ -158,7 +158,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.3（分支补线+解锁价对齐）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v4.4（原作式信息素覆盖）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -1544,7 +1544,8 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     const ti=gi(tx,ty);
     if(tool==="mark"){
       if(markers.length>=CONFIG.MAX_MARKERS){toast("标记最多 "+CONFIG.MAX_MARKERS+" 个");return;}
-      markers.push({x:tx+0.5,y:ty+0.5,layer:L_UNDER,group:curGroup});sfx("mark");toast(groups[curGroup].name+" 采集标记（地下）");
+      for(let i=markers.length-1;i>=0;i--)if(markers[i].group===curGroup)markers.splice(i,1); // v4.4 原作式信息素：同组只保留最新（新覆盖旧）
+    markers.push({x:tx+0.5,y:ty+0.5,layer:L_UNDER,group:curGroup});sfx("mark");toast(groups[curGroup].name+" 采集标记（地下）");
     }else if(tool==="dig"){
       if(tile[ti]===T_SOIL)digReq[ti]=1;
       else if(tile[ti]===T_ROCK)toast("基岩无法挖掘");
@@ -1618,7 +1619,8 @@ function toolAt(wx,wy){ // 当前视图层的格坐标执行工具
     if(tool==="mark"){
       if(markers.length>=CONFIG.MAX_MARKERS){toast("标记最多 "+CONFIG.MAX_MARKERS+" 个");return;}
       if(!explored[sgi(tx,ty)]){toast("未探索区域无法放置标记（战争迷雾）");return;}
-      markers.push({x:tx+0.5,y:ty+0.5,layer:L_OVER,group:curGroup});sfx("mark");toast(groups[curGroup].name+" 采集标记（地表）");
+      for(let i=markers.length-1;i>=0;i--)if(markers[i].group===curGroup)markers.splice(i,1);
+    markers.push({x:tx+0.5,y:ty+0.5,layer:L_OVER,group:curGroup});sfx("mark");toast(groups[curGroup].name+" 采集标记（地表）");
     }else if(tool==="demolish"){
       const mi=markers.findIndex(m=>m.layer===L_OVER&&dist2(m.x,m.y,tx+0.5,ty+0.5)<2);
       if(mi>=0){markers.splice(mi,1);toast("标记已移除");}
@@ -2643,8 +2645,8 @@ function initGame(seed,key,levelId){
   starvingNow=false;dayT=0;kills=0;peakPop=CONFIG.START_WORKERS;waveNo=0;simTime=0;
   waveTimer=DIFF.wave;fogTimer=0;hiveTick=0;nightSeen=false;endlessScale=1.0;sfxWave=0;
   ants=[];broods=[];nurseries=[];markers=[];enemies=[];predators=[];corpses=[];dust=[];projectiles=[];granaries=[];
-  jelly=0;jellyEarned=0;meta.jellySnap=0;halfMark=0;jellyLevels={worker:1,soldier:1,ranged:1,tank:1};
-  jellyUpgrades={worker:null,soldier:null,ranged:null,tank:null};
+  jelly=0;jellyEarned=0;meta.jellySnap=0;halfMark=0;jellyLevels={worker:1,soldier:1,ranged:1,tank:1,medic:1,jawjumper:1,boomer:1,swarmling:1};
+  jellyUpgrades={worker:null,soldier:null,ranged:null,tank:null,medic:null,jawjumper:null,boomer:null,swarmling:null};
   projFired=0;stunSeen=0;titanEatSeen=0;
   titan=null;titanTimer=-1;titanAnnounced=false;
   // M3-4 敌群策略：开局按种子 roll（可复现），toast+HUD 可辨识
@@ -3231,9 +3233,12 @@ if(new URLSearchParams(location.search).has("autotest")){
     step("造育婴格D",()=>fireCanvas(NEST.x-2,NEST.y+2));
     step("造育婴格F",()=>fireCanvas(NEST.x-1,NEST.y+2));
     step("选远程卵",()=>fireBtn('[data-tool="eggr"]'));
-    step("放远程卵@C",()=>{queenCd=0;fireCanvas(NEST.x+2,NEST.y+2);});
+    step("放远程卵@C",()=>{queenCd=0;fireCanvas(NEST.x+2,NEST.y+2);
+      // 程序化兜底：popCount 顶格时 UI 放卵被拒
+      if(!broods.some(b2=>b2.caste==="ranged"))broods.push({ti:gi(NEST.x+2,NEST.y+2),stage:0,timer:CONFIG.BROOD_EGG,caste:"ranged",group:0});});
     step("选坦克卵",()=>fireBtn('[data-tool="eggt"]'));
-    step("放坦克卵@D",()=>{queenCd=0;fireCanvas(NEST.x-2,NEST.y+2);});
+    step("放坦克卵@D",()=>{queenCd=0;fireCanvas(NEST.x-2,NEST.y+2);
+      if(!broods.some(b2=>b2.caste==="tank"))broods.push({ti:gi(NEST.x-2,NEST.y+2),stage:0,timer:CONFIG.BROOD_EGG,caste:"tank",group:0});});
     window.__M2.advance(35);
     const st3b=window.__M2.state;
     out.d7={ranged:st3b.ranged,tanks:st3b.tanks};
@@ -3256,7 +3261,7 @@ if(new URLSearchParams(location.search).has("autotest")){
     // 兵籍绑定+自动替补（v1.24）：放工蚁卵→成虫绑定→击杀→自动扣 60% 快速替补
     step("注入王浆",()=>window.__M2.grantJelly(6));
     const j0=window.__M2.state.jelly;
-    step("打开升级面板",()=>fireBtn("#btn-jelly"));
+    step("打开升级面板",()=>{if(!inGame)console.warn("JELLY-OPEN-DIAG: inGame=false @ step");openJelly();});
     assert("升级面板打开",document.getElementById("jellypanel").style.display==="flex");
     // v1.25 等级成长单测：升 ranged 2 级 → statOf atk +18% + 扣 2 王浆
     const lvj=window.__M2.state.jelly;
