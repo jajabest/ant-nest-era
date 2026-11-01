@@ -159,7 +159,7 @@
 <div id="menu" class="overlay">
   <div class="panel">
     <h1>蚁巢纪元</h1>
-    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v5.2（开局即存+读档保护）</div>
+    <div class="sub2">M5 · 战役 ｜ 四兵种 × 王浆升级 × 敌群策略 × 巨兽战 × 前两章关卡 ｜ v5.3（螳螂+蝎子+地表扩大）</div>
     <label>难度</label>
     <select id="sel-diff">
       <option value="easy">简单 · 敌群温和，适合熟悉操作</option>
@@ -211,7 +211,7 @@ const CONFIG = {
   // 地图
   SEED: 777,                    // 运行时由主菜单覆盖
   GRID_W: 96, GRID_H: 64,       // §5 地下 96×64（侧视剖面）
-  SGW: 128, SGH: 128,           // §5 地表 128×128（俯视）
+  SGW: 168, SGH: 168,           // v5.3 战神「地表再大一点」：128→168（面积 +72%——探索空间翻倍级）
   TILE: 16,
   // 蚂蚁
   ANT_SPEED: 2,                 // §5 移速 2 格/s
@@ -275,6 +275,9 @@ const CONFIG = {
   RETALIATE_T: 5,
   // 天敌（[PH] §5 蜘蛛战力≈8 兵蚁行；甲虫新增）
   SPIDER_HP: 300, SPIDER_ATK: 25, SPIDER_CD: 1.5, SPIDER_SPEED: 1.2,
+  MANTIS_HP: 420, MANTIS_ATK: 22, MANTIS_CD: 1.6, MANTIS_SPEED: 0.8, MANTIS_GUARD: 5, MANTIS_KB: 2.2, // [PH] 螳螂：区域守护（5 格巡逻圈）+镰刀击退（命中弹开 2.2 格）
+  SCORP_HP: 260, SCORP_ATK: 14, SCORP_CD: 1.3, SCORP_SPEED: 0.9, SCORP_POISON: 5, SCORP_POISON_DPS: 2, // [PH] 蝎子：毒尾——命中附加 5s 持续毒伤（2/s），疗养满血自然解毒
+  POISON_TICK: 0.5,
   BEETLE_HP: 150, BEETLE_ATK: 12, BEETLE_CD: 1.2, BEETLE_SPEED: 1.6,
   NIGHT_BUFF: 1.3,              // [PH] 夜晚天敌攻速/移速增益
   PRED_RESPAWN: 300,            // [PH] 天敌重生（不可根除只可控，§3 边界）
@@ -631,13 +634,14 @@ function pickTaunt(list,x,y){
   return t;
 }
 function addPred(kind,x,y){
-  const sp=kind==="spider", mc=kind==="molecricket";
+  const sp=kind==="spider", mc=kind==="molecricket", mn=kind==="mantis", sc=kind==="scorpion";
   predators.push({kind,x,y,ang:0,alive:true,respawnT:0,cd:0,wt:0,stunT:0,digT:0,
-    hp:sp?CONFIG.SPIDER_HP:mc?CONFIG.MOLE_HP:CONFIG.BEETLE_HP,
-    maxhp:sp?CONFIG.SPIDER_HP:mc?CONFIG.MOLE_HP:CONFIG.BEETLE_HP,
-    atk:sp?CONFIG.SPIDER_ATK:mc?CONFIG.MOLE_ATK:CONFIG.BEETLE_ATK,
-    cdMax:sp?CONFIG.SPIDER_CD:mc?CONFIG.MOLE_CD:CONFIG.BEETLE_CD,
-    speed:sp?CONFIG.SPIDER_SPEED:mc?CONFIG.MOLE_SPEED:CONFIG.BEETLE_SPEED,
+    hp:sp?CONFIG.SPIDER_HP:mc?CONFIG.MOLE_HP:mn?CONFIG.MANTIS_HP:sc?CONFIG.SCORP_HP:CONFIG.BEETLE_HP,
+    maxhp:sp?CONFIG.SPIDER_HP:mc?CONFIG.MOLE_HP:mn?CONFIG.MANTIS_HP:sc?CONFIG.SCORP_HP:CONFIG.BEETLE_HP,
+    atk:sp?CONFIG.SPIDER_ATK:mc?CONFIG.MOLE_ATK:mn?CONFIG.MANTIS_ATK:sc?CONFIG.SCORP_ATK:CONFIG.BEETLE_ATK,
+    cdMax:sp?CONFIG.SPIDER_CD:mc?CONFIG.MOLE_CD:mn?CONFIG.MANTIS_CD:sc?CONFIG.SCORP_CD:CONFIG.BEETLE_CD,
+    speed:sp?CONFIG.SPIDER_SPEED:mc?CONFIG.MOLE_SPEED:mn?CONFIG.MANTIS_SPEED:sc?CONFIG.SCORP_SPEED:CONFIG.BEETLE_SPEED,
+    poisonT:0,
     guard:{x,y},layer:mc?L_UNDER:L_OVER});
   return predators[predators.length-1]; // M5：房间开箱/追踪需要实体引用
 }
@@ -842,7 +846,7 @@ function onDeath(u,killer){
     if(!u.alive)return; // 幂等保护：已死天敌不重复结算（防弹道残留/混战补刀双计王浆）
     u.alive=false;u.respawnT=CONFIG.PRED_RESPAWN;
     if(killer&&killer.group!==undefined){kills++;jelly+=CONFIG.JELLY_PRED;jellyEarned+=CONFIG.JELLY_PRED; // v1.21 猎杀天敌=王浆渠道
-      toast("🍯 猎杀"+(u.kind==="spider"?"蜘蛛":"甲虫")+"——王浆 +1（当前 "+jelly+"）");}
+      toast("🍯 猎杀"+({spider:"蜘蛛",beetle:"甲虫",mantis:"螳螂",scorpion:"蝎子"}[u.kind]||"天敌")+"——王浆 +1（当前 "+jelly+"）");}
     pushCorpse(u.x,u.y,L_OVER);
     return;
   }
@@ -1044,16 +1048,31 @@ function predStep(p,dt){
   const atk=p.atk*buff, spd=p.speed*buff;
   // 索敌：4-5 格内任何蚂蚁（我方/敌方）
   const cand=[...ants.filter(a=>a.layer===L_OVER),...enemies.filter(e=>e.layer===L_OVER)];
-  const t=nearestOf(cand,p.x,p.y,p.kind==="spider"?4.5:3.5);
+  const t=nearestOf(cand,p.x,p.y,p.kind==="spider"?4.5:p.kind==="mantis"?CONFIG.MANTIS_GUARD:3.5);
   if(t&&p.cd<=0&&dist2(p.x,p.y,t.x,t.y)<1.8){
     if(t.caste&&!t.caste.startsWith("e"))damageAnt(t,atk);else t.hp-=atk;
     if(t.lastHitT!==undefined)t.lastHitT=simTime;
     if(t.hp<=0)onDeath(t,p);
+    else if(p.kind==="mantis"&&t.layer===L_OVER){ // v5.3 螳螂镰刀击退：命中弹开 2.2 格（打断远程站位）
+      const kb=Math.atan2(t.y-p.y,t.x-p.x);
+      for(let step=0;step<4;step++){
+        const kx=t.x+Math.cos(kb)*CONFIG.MANTIS_KB/4,ky=t.y+Math.sin(kb)*CONFIG.MANTIS_KB/4;
+        if(sWalk(kx|0,ky|0)){t.x=kx;t.y=ky;}
+      }
+    }else if(p.kind==="mantis"&&t.layer===L_OVER){ // v5.3 螳螂镰刀击退：命中弹开 2.2 格
+      const kb=Math.atan2(t.y-p.y,t.x-p.x);
+      for(let step=0;step<4;step++){
+        const kx=t.x+Math.cos(kb)*CONFIG.MANTIS_KB/4,ky=t.y+Math.sin(kb)*CONFIG.MANTIS_KB/4;
+        if(sWalk(kx|0,ky|0)){t.x=kx;t.y=ky;}
+      }
+    }else if(p.kind==="scorpion"&&t.caste){t.poisonT=CONFIG.SCORP_POISON;} // v5.3 蝎子毒尾：5s 持续毒伤
     p.cd=p.cdMax;
     return;
   }
   let tx,ty;
-  if(t&&dist2(p.x,p.y,t.x,t.y)<64){tx=t.x;ty=t.y;} // 追击 8 格内
+  if(t&&dist2(p.x,p.y,t.x,t.y)<64){tx=t.x;ty=t.y;
+    if(p.kind==="mantis"&&dist2(t.x,t.y,p.guard.x,p.guard.y)>CONFIG.MANTIS_GUARD*CONFIG.MANTIS_GUARD*4){tx=p.guard.x;ty=p.guard.y;}
+  }
   else if(p.kind==="spider"){tx=p.guard.x;ty=p.guard.y;}
   else{ // 甲虫游荡
     p.wt-=dt;
@@ -1111,6 +1130,8 @@ function antStep(a,dt){
       }
     }
   }
+  if(a.poisonT>0){a.poisonT-=dt;a.hp-=CONFIG.SCORP_POISON_DPS*dt; // v5.3 蝎毒 tick
+    if(a.hp<=0){onDeath(a,null);return;}}
   a.phase+=dt*10;a.atkCd=Math.max(0,a.atkCd-dt);
   a.rule=groups[a.group].rule; // 组规则实时下发（M2-8）
   if(a.caste==="tank"&&jellyUpgrades.tank==="taunt"&&a.hp<a.maxhp)a.hp=Math.min(a.maxhp,a.hp+CONFIG.TANK_REGEN*dt); // M3-2 嘲讽型转火回血
@@ -2212,6 +2233,22 @@ function drawPredator(c,p){
   c.fillStyle=night?"rgba(255,60,40,.10)":"rgba(255,60,40,.06)";
   c.beginPath();c.arc(0,0,40,0,7);c.fill(); // 危险圈
   c.rotate(p.ang);
+  if(p.kind==="mantis"){
+    c.fillStyle="#4a7a3a";c.beginPath();c.ellipse(0,0,7,4,0,0,7);c.fill();
+    c.strokeStyle="#6a9a4a";c.lineWidth=2.5;c.lineCap="round";
+    c.beginPath();c.moveTo(3,-2);c.lineTo(11,-5);c.moveTo(3,2);c.lineTo(11,5);c.stroke();
+    c.beginPath();c.moveTo(-4,0);c.lineTo(-12,0);c.stroke();
+    c.fillStyle="#2a4a1a";c.beginPath();c.arc(5,0,2.5,0,7);c.fill();
+    c.restore();return;
+  }
+  if(p.kind==="scorpion"){
+    c.fillStyle="#3a2a1a";c.beginPath();c.ellipse(0,0,6.5,4.5,0,0,7);c.fill();
+    c.strokeStyle="#2a1a0a";c.lineWidth=2;c.lineCap="round";
+    c.beginPath();c.moveTo(-5,0);c.quadraticCurveTo(-12,0,-11,-7);c.stroke();
+    c.fillStyle="#8a4a2a";c.beginPath();c.arc(-11,-7,1.8,0,7);c.fill();
+    c.strokeStyle="#2a1a0a";for(let i=0;i<3;i++){c.beginPath();c.moveTo(3,-1+i);c.lineTo(9,-3+i*2.5);c.stroke();}
+    c.restore();return;
+  }
   if(p.kind==="spider"){
     c.strokeStyle="#1a1410";c.lineWidth=2;c.lineCap="round";
     const ph=p.phase||0;
@@ -2686,7 +2723,12 @@ function initGame(seed,key,levelId){
   const nSp=Math.round(2*DIFF.pred),nBe=Math.round(2*DIFF.pred);
   if(CAP.preds!==false){ // M5：第一章无天敌
     for(let i=0;i<nSp;i++){const g=guards[i%guards.length];addPred("spider",g.x+2,g.y+2);predators[predators.length-1].guard={x:g.x+2,y:g.y+2};}
-    for(let i=0;i<nBe;i++)addPred("beetle",40+rng()*40,40+rng()*40);
+    for(let i=0;i<nBe;i++)addPred("beetle",40+rng()*(SGW-80),40+rng()*(SGH-80));
+    if(DIFF.pred>=1){
+      const gM=guards[0];addPred("mantis",gM.x-4,gM.y-4);predators[predators.length-1].guard={x:gM.x-4,y:gM.y-4};
+      const nSc=Math.round(2*DIFF.pred);
+      for(let i=0;i<nSc;i++)addPred("scorpion",50+rng()*(SGW-100),50+rng()*(SGH-100));
+    }
   }
   // UI 复位
   document.querySelectorAll(".gsel").forEach(x=>x.classList.toggle("active",+x.dataset.g===0));
@@ -2937,7 +2979,7 @@ function saveGame(){
       dugCount,collected:Math.floor(collected),collectedS:Math.floor(collectedS),rescues,
       titan:titan?{hp:Math.ceil(titan.hp),x:+titan.x.toFixed(2),y:+titan.y.toFixed(2),lifeT:Math.ceil(titan.lifeT)}:null,
       titanAnnounced,titanTimer:Math.ceil(titanTimer),
-      t:Date.now(), // v4.9 档位时间戳（多档继续入口排序用）
+      t:Date.now(),sw:CONFIG.SGW, // v5.3 地图尺寸入档（变更后旧档地图不恢复）
       groups:groups.map(g2=>g2.rule), // v4.7 队规则入档（玩家设的「战斗」读档不再回退采集）
       levelState:{roomsDone:levelState.roomsDone,raids:levelState.raids,eggsLost:levelState.eggsLost,
         eggDrops:levelState.eggDrops,raidPlan:levelState.raidPlan||null,
@@ -3006,8 +3048,8 @@ function resumeFrom(d){
   if(d.titan){titan={kind:"titan",x:d.titan.x,y:d.titan.y,ang:0,phase:0,cd:0,atk:CONFIG.TITAN_ATK,hp:d.titan.hp,maxhp:CONFIG.TITAN_HP,eatT:0,alive:true,lifeT:d.titan.lifeT,layer:L_OVER,aoeT:0};}
   projectiles.length=0;corpses.length=0;dust.length=0;digClaims.clear();
   // v1.29 恢复挖掘图/源储量/迷雾/统计——挖掉的隧道读档原样回来
-  if(d.map){tile.set(rleDec(d.map,tile.length));tileFood.set(rleDec(d.foodU,tileFood.length));dirtyMap=true;}
-  if(d.exp){explored.set(rleDec(d.exp,explored.length));sTileFood.set(rleDec(d.foodS,sTileFood.length));dirtySur=true;}
+  if(d.map&&d.sw===CONFIG.SGW){tile.set(rleDec(d.map,tile.length));tileFood.set(rleDec(d.foodU,tileFood.length));dirtyMap=true;}
+  if(d.exp&&d.sw===CONFIG.SGW){explored.set(rleDec(d.exp,explored.length));sTileFood.set(rleDec(d.foodS,sTileFood.length));dirtySur=true;}
   if(d.dugCount!==undefined){dugCount=d.dugCount;collected=d.collected;collectedS=d.collectedS;rescues=d.rescues;}
   if(d.granaries){granaries=d.granaries.map(ti=>({ti}));} // v3.3 粮仓恢复
   if(d.groups){d.groups.forEach((r2,i)=>{if(groups[i])groups[i].rule=r2;});
